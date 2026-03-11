@@ -56,6 +56,21 @@ def test_signup_duplicate_username(client):
     assert response.status_code == 400
     assert response.json() == {"detail": "Username already registered"}
 
+def test_signup_unauthorized(client):
+    login_response = client.post(
+        "/user/token",
+        data={"username": "normal_test", "password": "testpass"}
+    )
+    token = login_response.json()["access_token"]
+
+    response = client.post(
+        "/user/signup",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"username": "unauthorized_user", "password": "unauthorized_password"}
+    )
+    assert response.status_code == 401
+    assert response.json() == {"detail": "UNAUTHORIZED"}    
+
 def test_get_me_success(client):
     login_response = client.post(
         "/user/token",

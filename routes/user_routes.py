@@ -54,6 +54,9 @@ async def get_current_user(db: Session = Depends(get_db), token: str = Depends(o
 
 @user_router.post("/signup", response_model=UserResponse)
 async def create_user(user_schema: UserCreate, db: Session = Depends(get_db), current_user: UserModel = Depends(get_current_user)):
+    if not current_user.admin:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="UNAUTHORIZED")
+
     user = db.query(UserModel).filter(UserModel.username == user_schema.username).first()
     if user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already registered")
