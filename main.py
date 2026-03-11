@@ -1,4 +1,3 @@
-import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -46,6 +45,9 @@ def health_check():
     return {"status": "online"}
 
 if __name__ == "__main__":
+    import uvicorn
+    from config import settings
+    
     logger.info("Starting the API")
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=False)
     #uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

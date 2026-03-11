@@ -4,7 +4,7 @@ from sqlalchemy.orm import sessionmaker
 from alembic.config import Config
 from alembic import command
 import os
-from settings import settings
+from config import settings
 import logging
 
 logger = logging.getLogger(__name__)

@@ -2,7 +2,7 @@ from passlib.context import CryptContext
 from jose import jwt, JWTError
 from datetime import datetime, timedelta, timezone
 from fastapi.security import OAuth2PasswordBearer
-from settings import settings
+from config import settings
 
 
 SECRET_KEY = settings.SECRET_KEY

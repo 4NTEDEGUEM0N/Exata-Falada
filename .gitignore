@@ -2,3 +2,5 @@
 __pycache__/
 .env
 *.db
+.coverage
+.pytest_cahce
