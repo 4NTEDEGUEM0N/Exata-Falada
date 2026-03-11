@@ -1,5 +1,6 @@
 import uvicorn
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from database import upgrade_db
 import logging
@@ -21,6 +22,21 @@ async def lifespan(app: FastAPI):
     logger.info("Closing Aplication...")
 
 app = FastAPI(lifespan=lifespan)
+
+origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000"
+    #"https://meusite.com.br"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 from routes.user_routes import user_router
 app.include_router(user_router)
