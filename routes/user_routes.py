@@ -68,7 +68,7 @@ async def create_user(user_schema: UserCreate, db: Session = Depends(get_db), cu
         return new_user
 
 @user_router.get("/me", response_model=UserResponse)
-async def read_users_me(current_user: UserModel = Depends(get_current_user)):
+async def read_user_me(current_user: UserModel = Depends(get_current_user)):
     return current_user
 
 
