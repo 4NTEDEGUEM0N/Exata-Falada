@@ -1,14 +1,12 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
-import os
-from dotenv import load_dotenv
 from alembic.config import Config
 from alembic import command
+import os
+from settings import settings
 
-load_dotenv()
-
-DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL = settings.DATABASE_URL
 
 db = create_engine(DATABASE_URL)
 
@@ -48,8 +46,8 @@ def create_first_admin():
             print("Admin already exists.")
             return
         
-        admin_username = os.getenv("ADMIN_USER")
-        admin_password = os.getenv("ADMIN_PASSWORD")
+        admin_username = settings.ADMIN_USER
+        admin_password = settings.ADMIN_PASSWORD
 
         if not admin_username or not admin_password:
             print("Invalid admin credentials")

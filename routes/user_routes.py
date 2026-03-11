@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from models.user_model import UserModel
 from database import get_db
 from sqlalchemy.orm import Session
-from security import get_password_hash, verify_password, decode_token, oatuh2_schema, create_access_token
+from security import get_password_hash, verify_password, decode_token, oatuh2_schema, create_access_token, dummy_verify
 from pydantic import BaseModel, ConfigDict
 from typing import Optional
 from fastapi.security import OAuth2PasswordRequestForm
@@ -75,6 +75,7 @@ async def read_users_me(current_user: UserModel = Depends(get_current_user)):
 def authenticate_user(username: str, password: str, db: Session):
     user = db.query(UserModel).filter(UserModel.username == username).first()
     if not user:
+        dummy_verify()
         return None
     elif not verify_password(password, user.password):
         return None
