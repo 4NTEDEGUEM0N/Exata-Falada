@@ -5,7 +5,8 @@ import os
 import shutil
 import fitz
 import time
-import google.generativeai as genai
+from google import genai 
+from google.genai import types
 from PIL import Image
 from prompt_html import get_prompt, get_html
 import re
@@ -166,8 +167,7 @@ def pdf_para_imagens(caminho_pdf: str, paginas_selecionadas: List[int], dpi: int
     return pasta_saida, image_paths
 
 def analisar_imagens_com_gemini(pdf_basename: str, lista_caminhos: List[str]) -> List[Dict[str, Any]]:
-    genai.configure(api_key=settings.GOOGLE_API_KEY)
-    modelo = genai.GenerativeModel('gemini-2.5-flash-lite')
+    client = genai.Client(api_key=settings.GOOGLE_API_KEY)
     respostas = []
 
     for caminho in lista_caminhos:
@@ -188,19 +188,23 @@ def analisar_imagens_com_gemini(pdf_basename: str, lista_caminhos: List[str]) ->
             base64_image_data = base64.b64encode(image_data).decode('utf-8')
             prompt = get_prompt(pdf_basename, imagem.size, current_page_num_in_doc)
             
-            response = modelo.generate_content([prompt, imagem])
+            response = client.models.generate_content(
+                model='gemini-2.5-flash-lite', 
+                contents=[prompt, imagem]
+            )
             imagem.close()
 
             final_finish_reason = 'UNKNOWN'
             html_body = None
             
-            if response and hasattr(response, 'candidates') and response.candidates:
-                final_finish_reason = response.candidates[0].finish_reason.value if response.candidates[0].finish_reason else 'UNKNOWN'
+            if response and response.candidates:
+                candidate = response.candidates[0]
+                final_finish_reason = candidate.finish_reason.name if candidate.finish_reason else 'UNKNOWN'
 
                 response_text_content = response.text
-                if not response_text_content and response.candidates[0].content and response.candidates[0].content.parts:
+                if not response_text_content and candidate.content and candidate.content.parts:
                     response_text_content = ''.join(
-                        part.text for part in response.candidates[0].content.parts if hasattr(part, 'text')
+                        part.text for part in candidate.content.parts if hasattr(part, 'text') and part.text
                     )
 
                 if response_text_content:
