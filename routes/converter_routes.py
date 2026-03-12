@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request, BackgroundTasks, Form
 from fastapi.responses import FileResponse
 from config import settings
 import os
@@ -15,7 +15,7 @@ import html
 from typing import List, Dict, Optional, Tuple, Any
 from models.user_model import UserModel
 from models.task_model import TaskModel
-from database import get_db
+from database import get_db, SessionLocal
 from .user_routes import get_current_user
 from sqlalchemy.orm import Session
 from enum import Enum
@@ -33,7 +33,7 @@ class TaskStatusEnum(str, Enum):
     ERROR = "Error"
 
 @converter_router.post("/")
-async def convert_pdf(paginas: str = "", file: UploadFile = File(...), db: Session = Depends(get_db), current_user: UserModel = Depends(get_current_user)):
+async def convert_pdf(background_tasks: BackgroundTasks, paginas: str = Form(""), file: UploadFile = File(...), db: Session = Depends(get_db), current_user: UserModel = Depends(get_current_user)):
     if file.content_type != "application/pdf":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="O arquivo deve ser um PDF.")
     
@@ -54,20 +54,11 @@ async def convert_pdf(paginas: str = "", file: UploadFile = File(...), db: Sessi
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        new_task.status = TaskStatusEnum.PROCESSING
-        db.commit()
-
-        html_output_path = processar_pdf(file_path, paginas)
-        html_filename = os.path.basename(html_output_path)
-
-        new_task.status = TaskStatusEnum.COMPLETED
-        new_task.html_filename = html_filename
-        db.commit()
+        background_tasks.add_task(task_processar_pdf_background, new_task.id, file_path, paginas)
 
         return {
-            "pdf_filename": pdf_filename,
-            "html_filename": html_filename,
-            "status": "success"
+            "task_id": new_task.id,
+            "message": "Conversão iniciada com sucesso. Acompanhe o progresso."
         }
     
     except ValueError as ve:
@@ -108,6 +99,66 @@ async def baixar_arquivo(filename: str, db: Session = Depends(get_db), current_u
     )
 
 
+def log_to_task(db_session: Session, task_id: int, message: str, increment_progress: int = 0):
+    task = db_session.query(TaskModel).filter_by(id=task_id).first()
+    if task:
+        timestamp = time.strftime("[%H:%M:%S]")
+        new_log = f"{timestamp} {message}\n"
+        task.logs = (task.logs or "") + new_log
+        if increment_progress > 0:
+            task.progress = min(100, (task.progress or 0) + increment_progress)
+        db_session.commit()
+
+def task_processar_pdf_background(task_id: int, file_path: str, paginas: str):
+    db: Session = SessionLocal()
+    try:
+        task = db.query(TaskModel).filter_by(id=task_id).first()
+        if task:
+            task.status = TaskStatusEnum.PROCESSING
+            db.commit()
+
+        def log_cb(msg, inc=0):
+            log_to_task(db, task_id, msg, increment_progress=inc)
+        
+        log_cb("Iniciando processo de conversão do PDF...", 5)
+        html_output_path = processar_pdf(file_path, paginas, log_cb=log_cb)
+        html_filename = os.path.basename(html_output_path)
+        
+        task = db.query(TaskModel).filter_by(id=task_id).first()
+        if task:
+            task.status = TaskStatusEnum.COMPLETED
+            task.progress = 100
+            task.html_filename = html_filename
+            db.commit()
+        log_cb("Finalizado com sucesso! HTML pronto para download.", 0)
+    except Exception as e:
+        task = db.query(TaskModel).filter_by(id=task_id).first()
+        if task:
+            task.status = TaskStatusEnum.ERROR
+            db.commit()
+        log_to_task(db, task_id, f"ERRO CRÍTICO: {e}")
+    finally:
+        db.close()
+
+
+@converter_router.get("/task/{task_id}")
+async def check_task_status(task_id: int, db: Session = Depends(get_db), current_user: UserModel = Depends(get_current_user)):
+    task = db.query(TaskModel).filter(TaskModel.id == task_id).first()
+    
+    if not task:
+         raise HTTPException(status_code=404, detail="Tarefa não encontrada")
+         
+    if task.user_id != current_user.id:
+         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Acesso negado")
+         
+    return {
+        "status": task.status,
+        "progress": task.progress,
+        "logs": task.logs,
+        "html_filename": task.html_filename
+    }
+
+
 def parse_paginas(string_paginas: str, total_paginas: int) -> Optional[List[int]]:
     if not string_paginas.strip():
         return list(range(total_paginas))
@@ -142,7 +193,7 @@ def parse_paginas(string_paginas: str, total_paginas: int) -> Optional[List[int]
 
     return sorted(list(paginas))
 
-def pdf_para_imagens(caminho_pdf: str, paginas_selecionadas: List[int], dpi: int = 100) -> Tuple[str, List[str]]:
+def pdf_para_imagens(caminho_pdf: str, paginas_selecionadas: List[int], dpi: int = 100, log_cb=None) -> Tuple[str, List[str]]:
     pdf_basename = os.path.basename(caminho_pdf)
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     pasta_saida = os.path.join('files/temp_processing', f"{pdf_basename}_{timestamp}")
@@ -160,19 +211,23 @@ def pdf_para_imagens(caminho_pdf: str, paginas_selecionadas: List[int], dpi: int
                 
                 image_paths.append(nome_arquivo)
                 logger.info(f"Página {numero_pagina + 1} salva como {nome_arquivo}")
+                if log_cb: log_cb(f"Página {numero_pagina + 1} extraída.", 0)
     except Exception as e:
         logger.error(f"Erro ao converter PDF para imagens: {e}", exc_info=True)
         raise RuntimeError(f"Erro na conversão PDF para imagem: {e}")
 
     return pasta_saida, image_paths
 
-def analisar_imagens_com_gemini(pdf_basename: str, lista_caminhos: List[str]) -> List[Dict[str, Any]]:
+def analisar_imagens_com_gemini(pdf_basename: str, lista_caminhos: List[str], log_cb=None) -> List[Dict[str, Any]]:
     client = genai.Client(api_key=settings.GOOGLE_API_KEY)
     respostas = []
+    total_imgs = len(lista_caminhos)
+    inc_per_page = max(1, 65 // total_imgs) if total_imgs > 0 else 0
 
     for caminho in lista_caminhos:
         try:
             logger.info(f"Processando: {caminho}...")
+            if log_cb: log_cb(f"Enviando {caminho} para o Google Gemini...", 0)
             
             if not os.path.exists(caminho):
                 raise FileNotFoundError(f"Arquivo não encontrado: {caminho}")
@@ -240,11 +295,13 @@ def analisar_imagens_com_gemini(pdf_basename: str, lista_caminhos: List[str]) ->
             }
             respostas.append(resposta)
             logger.info("✅ Sucesso!")
+            if log_cb: log_cb(f"✅ Sucesso na pág {current_page_num_in_doc}!", inc_per_page)
             
             time.sleep(2)
             
         except Exception as e:
             logger.error(f"❌ Erro ao processar {caminho}: {e}", exc_info=True)
+            if log_cb: log_cb(f"❌ Erro na pág: {e}", inc_per_page)
             if 'imagem' in locals() and hasattr(imagem, 'close'):
                 imagem.close()
                 
@@ -308,7 +365,7 @@ def merge_html(pdf_filename_title: str, report_button: bool, content_list: List[
     logger.info(f"HTML salvo com sucesso em: {full_output_path}")
     return full_output_path
 
-def processar_pdf(caminho_pdf: str, string_paginas: str):
+def processar_pdf(caminho_pdf: str, string_paginas: str, log_cb):
     if not os.path.exists(caminho_pdf):
         raise FileNotFoundError(f"Erro: Arquivo PDF não encontrado em {caminho_pdf}")
 
@@ -318,37 +375,38 @@ def processar_pdf(caminho_pdf: str, string_paginas: str):
     except Exception as e:
         raise ValueError(f"Erro ao abrir o PDF {caminho_pdf}: {e}")
     
-    logger.info("Iniciando o Parser das Páginas")
+    log_cb("Iniciando o Parser das Páginas", 5)
     paginas_selecionadas = parse_paginas(string_paginas, total_paginas)
     if paginas_selecionadas is None:
         raise ValueError("Falha no parser de páginas. Verifique o formato inserido.")
-    logger.info(f"Páginas a processar: {[p + 1 for p in paginas_selecionadas]}")
-    logger.info("Fim do Parse das Páginas\n")
+    log_cb(f"Páginas a processar: {[p + 1 for p in paginas_selecionadas]}")
+    log_cb("Fim do Parse das Páginas\n")
 
-    logger.info("Convertendo o PDF para imagens...")
-    pasta_saida, image_paths = pdf_para_imagens(caminho_pdf, paginas_selecionadas)
+    log_cb("Convertendo o PDF para imagens...", 10)
+    pasta_saida, image_paths = pdf_para_imagens(caminho_pdf, paginas_selecionadas, log_cb=log_cb)
     
     if not image_paths: 
         if os.path.exists(pasta_saida):
             shutil.rmtree(pasta_saida, ignore_errors=True)
         raise RuntimeError("Falha ao converter PDF para imagens ou nenhuma imagem gerada.")
         
-    logger.info("Fim da conversão\n")
+    log_cb("Fim da conversão\n")
 
-    logger.info("Gerando HTML de cada imagem...")
+    log_cb("Gerando HTML de cada imagem...")
     pdf_basename = os.path.basename(caminho_pdf)
-    respostas = analisar_imagens_com_gemini(pdf_basename, image_paths)
-    logger.info("Os HTML foram gerados\n")
+    respostas = analisar_imagens_com_gemini(pdf_basename, image_paths, log_cb=log_cb)
+    log_cb("Os HTML foram gerados\n")
 
-    logger.info("Mesclando os HTML...")
+    log_cb("Mesclando os HTML...", 5)
     html_output_path = merge_html(pdf_basename, True, respostas)
-    logger.info("HTML Mesclado\n")
+    log_cb("HTML Mesclado\n", 5)
     
-    logger.info("Limpando arquivos temporários...")
+    log_cb("Limpando arquivos temporários...")
     try:
         shutil.rmtree(pasta_saida)
-        logger.info("Arquivos temporários removidos com sucesso.")
+        log_cb("Arquivos temporários removidos com sucesso.")
     except Exception as e:
         logger.warning(f"Aviso: Não foi possível remover a pasta temporária {pasta_saida}: {e}")
     
     return html_output_path
+

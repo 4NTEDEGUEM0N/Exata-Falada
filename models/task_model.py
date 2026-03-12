@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy import Column, Integer, String, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from database import Base
 
@@ -9,6 +9,9 @@ class TaskModel(Base):
     pdf_filename = Column("pdf_filename", String, nullable=False)
     html_filename = Column("html_filename", String)
     status = Column("status", String, nullable=False)
+    
+    progress = Column("progress", Integer, default=0)
+    logs = Column("logs", Text, default="")
 
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     user = relationship("UserModel", back_populates="task")

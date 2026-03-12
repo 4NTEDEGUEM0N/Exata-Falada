@@ -45,9 +45,9 @@ def test_convert_pdf_success(mock_file, mock_copy, mock_processar, client, auth_
     
     assert response.status_code == 200
     data = response.json()
-    assert data["status"] == "success"
-    assert data["pdf_filename"] == "test.pdf"
-    assert data["html_filename"] == "output.html"
+    assert "task_id" in data
+    assert "message" in data
+    assert data["message"] == "Conversão iniciada com sucesso. Acompanhe o progresso."
 
 def test_convert_pdf_invalid_type(client, auth_headers):
     file_content = b"just text, not a pdf"
@@ -95,6 +95,8 @@ def test_convert_pdf_huge_file(mock_settings, client, auth_headers):
 @patch('routes.converter_routes.shutil.copyfileobj')
 @patch('builtins.open', new_callable=mock_open)
 def test_convert_pdf_processar_error(mock_file, mock_copy, mock_processar, client, auth_headers):
+    # This shouldn't throw an immediate 400 because processar_pdf runs on background now.
+    # We should just assert the 200 schedule acceptance.
     mock_processar.side_effect = ValueError("Página inválida")
     
     file_content = b"%PDF-1.4 dummy pdf content"
@@ -107,8 +109,8 @@ def test_convert_pdf_processar_error(mock_file, mock_copy, mock_processar, clien
         data={"paginas": "1-2"}
     )
     
-    assert response.status_code == 400
-    assert response.json() == {"detail": "Página inválida"}
+    assert response.status_code == 200
+    assert "task_id" in response.json()
 
 def test_download_file_success(client, auth_headers, test_user_id, setup_db, tmp_path):
     # 1. Provide a dummy file in a temp directory
