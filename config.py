@@ -1,17 +1,27 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
+import os
 
 class Settings(BaseSettings):
     SECRET_KEY: str
+    GOOGLE_API_KEY: str
     DATABASE_URL: str
     ADMIN_USER: str
     ADMIN_PASSWORD: str
     
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30 
     ALGORITHM: str = "HS256"
+    UPLOAD_DIR: str = "files/uploads"
+    OUTPUT_DIR: str = "files/output"
+    MAX_FILE_SIZE: int = 50 * 1024 * 1024
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 settings = Settings()
+if not os.path.exists(settings.OUTPUT_DIR):
+    os.makedirs(settings.OUTPUT_DIR)
+
+if not os.path.exists(settings.UPLOAD_DIR):
+    os.makedirs(settings.UPLOAD_DIR)
 """"""
 
 """

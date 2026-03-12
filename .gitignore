@@ -4,3 +4,4 @@ __pycache__/
 *.db
 .coverage
 .pytest_cahce/
+files/

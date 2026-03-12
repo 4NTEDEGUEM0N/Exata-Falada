@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from database import upgrade_db
@@ -36,9 +37,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 from routes.user_routes import user_router
 app.include_router(user_router)
+from routes.converter_routes import converter_router
+app.include_router(converter_router)
 
 @app.get("/")
 def health_check():
