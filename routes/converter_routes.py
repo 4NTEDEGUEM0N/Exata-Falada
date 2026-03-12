@@ -12,6 +12,12 @@ import re
 import base64
 import html
 from typing import List, Dict, Optional, Tuple, Any
+from models.user_model import UserModel
+from models.task_model import TaskModel
+from database import get_db
+from .user_routes import get_current_user
+from sqlalchemy.orm import Session
+from enum import Enum
 
 import logging
 
@@ -19,41 +25,76 @@ logger = logging.getLogger(__name__)
 
 converter_router = APIRouter(prefix="/converter", tags=["converter"])
 
+class TaskStatusEnum(str, Enum):
+    CREATED = "Created"
+    PROCESSING = "Processing"
+    COMPLETED = "Completed"
+    ERROR = "Error"
+
 @converter_router.post("/")
-async def convert_pdf(paginas: str = "", file: UploadFile = File(...)):
+async def convert_pdf(paginas: str = "", file: UploadFile = File(...), db: Session = Depends(get_db), current_user: UserModel = Depends(get_current_user)):
     if file.content_type != "application/pdf":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="O arquivo deve ser um PDF.")
     
     if file.size > settings.MAX_FILE_SIZE:
         raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail="Arquivo muito grande. O limite é 50MB.")
 
-    file_path = os.path.join(settings.UPLOAD_DIR, file.filename)    
+    pdf_filename = re.sub(r'[^a-zA-Z0-9.\-_]', '_', file.filename)
+    task_data = {"pdf_filename": pdf_filename, "status": TaskStatusEnum.CREATED, "user_id": current_user.id}
+    new_task = TaskModel(**task_data)
+    db.add(new_task)
+    db.commit()
+    db.refresh(new_task)
+
+    unique_filename = f"{new_task.id}_{pdf_filename}"
+    file_path = os.path.join(settings.UPLOAD_DIR, unique_filename)
 
     try:
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
+        new_task.status = TaskStatusEnum.PROCESSING
+        db.commit()
+
         html_output_path = processar_pdf(file_path, paginas)
-        html_file_name = os.path.basename(html_output_path)
+        html_filename = os.path.basename(html_output_path)
+
+        new_task.status = TaskStatusEnum.COMPLETED
+        new_task.html_filename = html_filename
+        db.commit()
 
         return {
-            "pdf_filename": file.filename,
-            "html_filename": html_file_name,
+            "pdf_filename": pdf_filename,
+            "html_filename": html_filename,
             "status": "success"
         }
     
     except ValueError as ve:
+        new_task.status = TaskStatusEnum.ERROR
+        db.commit()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
         
     except FileNotFoundError:
+        new_task.status = TaskStatusEnum.ERROR
+        db.commit()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Arquivo não encontrado durante o processamento.")
         
     except Exception as e:
+        new_task.status = TaskStatusEnum.ERROR
+        db.commit()
         logger.critical(f"ERRO CRÍTICO: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Ocorreu um erro inesperado ao processar o arquivo.")
 
 @converter_router.get("/download/{filename}")
-async def baixar_arquivo(filename: str):
+async def baixar_arquivo(filename: str, db: Session = Depends(get_db), current_user: UserModel = Depends(get_current_user)):
+    filename = os.path.basename(filename)
+    task = db.query(TaskModel).filter(TaskModel.html_filename == filename).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Arquivo não encontrado ou já expirou.")
+    
+    if task.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="UNAUTHORIZED")
+
     file_path = os.path.join(settings.OUTPUT_DIR, filename)
     
     if not os.path.exists(file_path):
@@ -108,18 +149,19 @@ def pdf_para_imagens(caminho_pdf: str, paginas_selecionadas: List[int], dpi: int
     image_paths = []
 
     try:
-        documento = fitz.open(caminho_pdf)
-        for numero_pagina in paginas_selecionadas:
-            pagina = documento.load_page(numero_pagina)
-            imagem = pagina.get_pixmap(dpi=dpi)
-            
-            nome_arquivo = os.path.join(pasta_saida, f"pagina_{numero_pagina + 1}.png")
-            image_paths.append(nome_arquivo)
-            
-            imagem.save(nome_arquivo)
-            logger.info(f"Página {numero_pagina + 1} salva como {nome_arquivo}")
+        with fitz.open(caminho_pdf) as documento:
+            for numero_pagina in paginas_selecionadas:
+                pagina = documento.load_page(numero_pagina)
+                imagem = pagina.get_pixmap(dpi=dpi)
+                
+                nome_arquivo = os.path.join(pasta_saida, f"pagina_{numero_pagina + 1}.png")
+                imagem.save(nome_arquivo)
+                
+                image_paths.append(nome_arquivo)
+                logger.info(f"Página {numero_pagina + 1} salva como {nome_arquivo}")
     except Exception as e:
-        logger.info(f"Erro ao converter PDF para imagens: {e}")
+        logger.error(f"Erro ao converter PDF para imagens: {e}", exc_info=True)
+        raise RuntimeError(f"Erro na conversão PDF para imagem: {e}")
 
     return pasta_saida, image_paths
 
@@ -147,6 +189,7 @@ def analisar_imagens_com_gemini(pdf_basename: str, lista_caminhos: List[str]) ->
             prompt = get_prompt(pdf_basename, imagem.size, current_page_num_in_doc)
             
             response = modelo.generate_content([prompt, imagem])
+            imagem.close()
 
             final_finish_reason = 'UNKNOWN'
             html_body = None
@@ -177,13 +220,13 @@ def analisar_imagens_com_gemini(pdf_basename: str, lista_caminhos: List[str]) ->
                         html_body = re.sub(r'<bdi>\s*</bdi>', '', html_body)
 
             if html_body is None:
-                logger.info(f"Erro: Falha ao extrair HTML para {pdf_basename} (pág {current_page_num_in_doc}).")
+                logger.warning(f"Aviso: Falha ao extrair HTML para {pdf_basename} (pág {current_page_num_in_doc}).")
                 if response:
-                    logger.info(f"Texto bruto (300c): {str(response.text)[:300]}...")
+                    logger.warning(f"Texto bruto (300c): {str(response.text)[:300]}...")
                     try:
-                        logger.info(f"Motivo: {final_finish_reason} ({response.candidates[0].finish_reason.name})")
+                        logger.warning(f"Motivo: {final_finish_reason} ({response.candidates[0].finish_reason.name})")
                     except AttributeError:
-                        logger.info(f"Motivo: {final_finish_reason}")
+                        logger.warning(f"Motivo: {final_finish_reason}")
             
             resposta = {
                 "page_num_in_doc": current_page_num_in_doc, 
@@ -197,7 +240,10 @@ def analisar_imagens_com_gemini(pdf_basename: str, lista_caminhos: List[str]) ->
             time.sleep(2)
             
         except Exception as e:
-            logger.info(f"❌ Erro ao processar {caminho}: {e}")
+            logger.error(f"❌ Erro ao processar {caminho}: {e}", exc_info=True)
+            if 'imagem' in locals() and hasattr(imagem, 'close'):
+                imagem.close()
+                
             match_pagina = re.search(r"pagina_(\d+)\.png$", caminho)
             current_page_num = match_pagina.group(1) if match_pagina else "Desconhecida"
             respostas.append({
@@ -275,7 +321,7 @@ def processar_pdf(caminho_pdf: str, string_paginas: str):
     logger.info(f"Páginas a processar: {[p + 1 for p in paginas_selecionadas]}")
     logger.info("Fim do Parse das Páginas\n")
 
-    logger.info("\nConvertendo o PDF para imagens...")
+    logger.info("Convertendo o PDF para imagens...")
     pasta_saida, image_paths = pdf_para_imagens(caminho_pdf, paginas_selecionadas)
     
     if not image_paths: 
@@ -299,6 +345,6 @@ def processar_pdf(caminho_pdf: str, string_paginas: str):
         shutil.rmtree(pasta_saida)
         logger.info("Arquivos temporários removidos com sucesso.")
     except Exception as e:
-        logger.info(f"Aviso: Não foi possível remover a pasta temporária {pasta_saida}: {e}")
+        logger.warning(f"Aviso: Não foi possível remover a pasta temporária {pasta_saida}: {e}")
     
     return html_output_path
