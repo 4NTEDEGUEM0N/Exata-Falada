@@ -35,8 +35,14 @@
         </header>
 
         <main>
-            <section class="upload-section">
-                <h2>Converter PDF para HTML</h2>
+            <div class="tabs">
+                <button class="tab-btn active" data-target="view-converter">Converter PDF</button>
+                <button class="tab-btn" data-target="view-patcher">Corrigir HTML</button>
+            </div>
+
+            <div id="view-converter" class="view-section active">
+                <section class="upload-section">
+                    <h2>Converter PDF para HTML</h2>
                 <form id="upload-form">
                     <div class="file-drop-area">
                         <span class="file-message">Arraste seu PDF aqui ou clique para selecionar</span>
@@ -110,6 +116,50 @@
                     </button>
                 </div>
             </section>
+        </div>
+
+            <div id="view-patcher" class="view-section hidden">
+                <section class="upload-section">
+                    <h2>Corrigir/Mesclar Arquivos HTML</h2>
+                    <p class="section-desc">Use esta ferramenta para unir um arquivo original e um arquivo com correções. Ideal para corrigir falhas em um arquivo HTML gerado pela conversão de PDF (páginas faltando ou com conteúdo incompleto).</p>
+                    
+                    <div class="instructions">
+                        <h3>Como usar:</h3>
+                        <ol>
+                            <li>Volte para a aba <strong>Converter PDF</strong>.</li>
+                            <li>Envie o mesmo PDF novamente, mas especifique <strong>apenas</strong> as páginas com erro (ex: <code>4, 9-11</code>).</li>
+                            <li>A conversão irá gerar um arquivo HTML menor (apenas as páginas reprocessadas).</li>
+                            <li>Use o formulário abaixo:
+                                <ul>
+                                    <li><strong>HTML Original:</strong> O arquivo grande gerado na primeira conversão.</li>
+                                    <li><strong>HTML com Correções:</strong> O arquivo pequeno recém-gerado.</li>
+                                </ul>
+                            </li>
+                        </ol>
+                    </div>
+
+                    <form id="patcher-form">
+                        <div class="input-group">
+                            <label>1. Arquivo HTML Original (com falhas)</label>
+                            <div class="file-drop-area" id="original-drop-area">
+                                <span class="file-message" id="original-msg">Arraste seu HTML original aqui ou clique para selecionar</span>
+                                <input type="file" id="original-file" accept=".html,.htm" required>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label>2. Arquivo HTML com Correções (páginas reprocessadas)</label>
+                            <div class="file-drop-area" id="corrections-drop-area">
+                                <span class="file-message" id="corrections-msg">Arraste seu HTML com correções aqui ou clique para selecionar</span>
+                                <input type="file" id="corrections-file" accept=".html,.htm" required>
+                            </div>
+                        </div>
+
+                        <button type="submit" id="patch-btn" class="primary-btn">Processar e Baixar</button>
+                        <p id="patcher-error" class="error-msg"></p>
+                    </form>
+                </section>
+            </div>
         </main>
     </div>
 

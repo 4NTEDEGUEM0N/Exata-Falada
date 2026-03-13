@@ -22,6 +22,15 @@ const terminalLogs = document.getElementById('terminal-logs');
 const downloadContainer = document.getElementById('download-container');
 const downloadBtn = document.getElementById('download-btn');
 
+const tabBtns = document.querySelectorAll('.tab-btn');
+const viewSections = document.querySelectorAll('.view-section');
+
+const patcherForm = document.getElementById('patcher-form');
+const originalFileInput = document.getElementById('original-file');
+const correctionsFileInput = document.getElementById('corrections-file');
+const patchBtn = document.getElementById('patch-btn');
+const patcherError = document.getElementById('patcher-error');
+
 // Authentication Check
 function checkAuth() {
     const token = localStorage.getItem('token');
@@ -281,6 +290,106 @@ async function downloadFile(filename) {
          alert('Erro de rede ao tentar baixar o arquivo.');
     }
 }
+
+// Tabs functionality
+tabBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+        // Remove active class from all buttons and sections
+        tabBtns.forEach(b => b.classList.remove('active'));
+        viewSections.forEach(s => {
+            if (s.classList.contains('active')) {
+                s.classList.replace('active', 'hidden');
+            }
+        });
+
+        // Add active class to clicked button
+        btn.classList.add('active');
+
+        // Show target section
+        const targetId = btn.getAttribute('data-target');
+        document.getElementById(targetId).classList.replace('hidden', 'active');
+    });
+});
+
+// Patcher File Handlers
+originalFileInput.addEventListener('change', (e) => {
+    const fileName = e.target.files[0]?.name;
+    document.getElementById('original-msg').textContent = fileName || 'Arraste seu HTML original aqui ou clique para selecionar';
+});
+
+correctionsFileInput.addEventListener('change', (e) => {
+    const fileName = e.target.files[0]?.name;
+    document.getElementById('corrections-msg').textContent = fileName || 'Arraste seu HTML com correções aqui ou clique para selecionar';
+});
+
+// Patcher Form Submit
+patcherForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    patcherError.textContent = '';
+    
+    const originalFile = originalFileInput.files[0];
+    const correctionsFile = correctionsFileInput.files[0];
+    const token = localStorage.getItem('token');
+    
+    if (!originalFile || !correctionsFile || !token) return;
+
+    const formData = new FormData();
+    formData.append('original_file', originalFile);
+    formData.append('corrections_file', correctionsFile);
+
+    patchBtn.disabled = true;
+    patchBtn.textContent = 'Processando...';
+
+    try {
+        const response = await fetch(`${API_URL}/patcher/`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
+            body: formData
+        });
+
+        if (response.ok) {
+            let filename = 'arquivo_corrigido.html';
+            const disposition = response.headers.get('content-disposition');
+            console.log('Disposition Header:', disposition);
+            
+            if (disposition && disposition.indexOf('filename=') !== -1) {
+                // Remove trailing quotes, spaces, and handle potentially encoded filenames
+                const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+                const matches = filenameRegex.exec(disposition);
+                if (matches != null && matches[1]) { 
+                    filename = matches[1].replace(/['"]/g, '').trim();
+                }
+            }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+            
+            patchBtn.textContent = 'Processado com Sucesso!';
+            setTimeout(() => {
+                patchBtn.disabled = false;
+                patchBtn.textContent = 'Processar e Baixar';
+            }, 3000);
+        } else {
+            const error = await response.json();
+            patcherError.textContent = error.detail || 'Erro ao processar os arquivos.';
+            patchBtn.disabled = false;
+            patchBtn.textContent = 'Processar e Baixar';
+        }
+    } catch (error) {
+        patcherError.textContent = 'Erro de rede ao comunicar com o servidor.';
+        patchBtn.disabled = false;
+        patchBtn.textContent = 'Processar e Baixar';
+    }
+});
 
 // Init
 checkAuth();

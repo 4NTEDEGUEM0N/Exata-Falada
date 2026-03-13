@@ -262,6 +262,97 @@ input[type="file"] {
     font-size: 0.875rem;
 }
 
+/* Tabs */
+.tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 0;
+}
+
+.tab-btn {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s;
+    border-radius: 0;
+    margin-bottom: -2px; /* Pull down to overlap the container's border */
+    width: auto;
+}
+
+.tab-btn:hover {
+    color: var(--primary);
+    background-color: rgba(79, 70, 229, 0.05);
+}
+
+.tab-btn.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
+.view-section {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Patcher Section Specifics */
+.section-desc {
+    color: var(--text-muted);
+    margin-bottom: 1.5rem;
+    line-height: 1.5;
+}
+
+.instructions {
+    background-color: rgba(79, 70, 229, 0.05);
+    border-left: 4px solid var(--primary);
+    padding: 1.25rem;
+    border-radius: 0 8px 8px 0;
+    margin-bottom: 2rem;
+}
+
+.instructions h3 {
+    font-size: 1rem;
+    margin-bottom: 0.75rem;
+    color: var(--primary);
+}
+
+.instructions ol {
+    margin-left: 1.5rem;
+    margin-bottom: 0.5rem;
+    color: var(--text-main);
+    line-height: 1.6;
+}
+
+.instructions ul {
+    margin-left: 1.5rem;
+    margin-top: 0.5rem;
+    color: var(--text-muted);
+}
+
+.instructions li {
+    margin-bottom: 0.5rem;
+}
+
+.instructions code {
+    background-color: var(--surface);
+    padding: 0.2rem 0.4rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.85em;
+}
+
+
 /* Progress and Terminal */
 .progress-section {
     margin-top: 2rem;

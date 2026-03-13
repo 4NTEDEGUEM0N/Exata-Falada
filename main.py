@@ -36,14 +36,17 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition"]
 )
 
 from routes.user_routes import user_router
 app.include_router(user_router)
 from routes.converter_routes import converter_router
 app.include_router(converter_router)
-from routes.task_router import task_router
+from routes.task_routes import task_router
 app.include_router(task_router)
+from routes.patcher_routes import patcher_router
+app.include_router(patcher_router)
 
 @app.get("/")
 def health_check():
