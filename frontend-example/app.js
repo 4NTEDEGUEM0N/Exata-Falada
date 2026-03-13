@@ -54,6 +54,15 @@ async function fetchUserInfo(token) {
         if (response.ok) {
             const data = await response.json();
             userDisplay.textContent = `Olá, ${data.username}`;
+            
+            // Check admin status to show advanced settings
+            if (data.admin === true) {
+                document.getElementById('admin-settings').classList.remove('hidden');
+                userDisplay.innerHTML += ' <span style="color:var(--primary); font-size: 0.8em; font-weight: bold;">[ADMIN]</span>';
+            } else {
+                document.getElementById('admin-settings').classList.add('hidden');
+            }
+            
             showApp();
         } else {
             logout();
@@ -125,6 +134,20 @@ uploadForm.addEventListener('submit', async (e) => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('paginas', pages);
+
+    // Append admin settings if visible and filled
+    const adminSettings = document.getElementById('admin-settings');
+    if (!adminSettings.classList.contains('hidden')) {
+        const dpi = document.getElementById('dpi').value;
+        const workers = document.getElementById('workers').value;
+        const model = document.getElementById('model').value;
+        const reportButton = document.getElementById('report-button').checked;
+
+        if (dpi) formData.append('dpi', dpi);
+        if (workers) formData.append('gemini_workers', workers);
+        if (model) formData.append('gemini_model', model);
+        formData.append('report_button', reportButton);
+    }
 
     // Setup UI for processing
     convertBtn.disabled = true;

@@ -20,6 +20,7 @@ class UserCreate(BaseModel):
 class UserResponse(BaseModel):
     id: int
     username: str
+    admin: bool
     model_config = ConfigDict(from_attributes=True)
 
 class TokenResponse(BaseModel):

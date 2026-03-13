@@ -19,6 +19,7 @@ from database import get_db, SessionLocal
 from .user_routes import get_current_user
 from sqlalchemy.orm import Session
 from enum import Enum
+from pydantic import BaseModel
 
 import logging
 
@@ -32,13 +33,44 @@ class TaskStatusEnum(str, Enum):
     COMPLETED = "Completed"
     ERROR = "Error"
 
+class ConverterRequest(BaseModel):
+    paginas: Optional[str] = ""
+    dpi: Optional[int] = settings.DEFAULT_DPI
+    gemini_workers: Optional[int] = settings.DEFAULT_GEMINI_WORKERS
+    gemini_model: Optional[str] = settings.DEFAULT_MODEL
+    report_button: Optional[bool] = settings.DEFAULT_REPORT_BUTTON
+
 @converter_router.post("/")
-async def convert_pdf(background_tasks: BackgroundTasks, paginas: str = Form(""), file: UploadFile = File(...), db: Session = Depends(get_db), current_user: UserModel = Depends(get_current_user)):
+async def convert_pdf(
+    background_tasks: BackgroundTasks, 
+    file: UploadFile = File(...), 
+    paginas: Optional[str] = Form(""),
+    dpi: Optional[int] = Form(settings.DEFAULT_DPI),
+    gemini_workers: Optional[int] = Form(settings.DEFAULT_GEMINI_WORKERS),
+    gemini_model: Optional[str] = Form(settings.DEFAULT_MODEL),
+    report_button: Optional[bool] = Form(settings.DEFAULT_REPORT_BUTTON),
+    db: Session = Depends(get_db), 
+    current_user: UserModel = Depends(get_current_user)
+):
     if file.content_type != "application/pdf":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="O arquivo deve ser um PDF.")
     
     if file.size > settings.MAX_FILE_SIZE:
         raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail="Arquivo muito grande. O limite é 50MB.")
+
+    if not current_user.admin:
+        dpi = settings.DEFAULT_DPI
+        gemini_workers = settings.DEFAULT_GEMINI_WORKERS
+        gemini_model = settings.DEFAULT_MODEL
+        report_button = settings.DEFAULT_REPORT_BUTTON
+
+    converter_request_schema = ConverterRequest(
+        paginas=paginas,
+        dpi=dpi,
+        gemini_workers=gemini_workers,
+        gemini_model=gemini_model,
+        report_button=report_button
+    )
 
     pdf_filename = re.sub(r'[^a-zA-Z0-9.\-_]', '_', file.filename)
     task_data = {"pdf_filename": pdf_filename, "status": TaskStatusEnum.CREATED, "user_id": current_user.id}
@@ -54,7 +86,7 @@ async def convert_pdf(background_tasks: BackgroundTasks, paginas: str = Form("")
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        background_tasks.add_task(task_processar_pdf_background, new_task.id, file_path, paginas)
+        background_tasks.add_task(task_processar_pdf_background, new_task.id, file_path, converter_request_schema)
 
         return {
             "task_id": new_task.id,
@@ -109,7 +141,7 @@ def log_to_task(db_session: Session, task_id: int, message: str, increment_progr
             task.progress = min(100, (task.progress or 0) + increment_progress)
         db_session.commit()
 
-def task_processar_pdf_background(task_id: int, file_path: str, paginas: str):
+def task_processar_pdf_background(task_id: int, file_path: str, converter_request_schema: ConverterRequest):
     db: Session = SessionLocal()
     try:
         task = db.query(TaskModel).filter_by(id=task_id).first()
@@ -121,7 +153,7 @@ def task_processar_pdf_background(task_id: int, file_path: str, paginas: str):
             log_to_task(db, task_id, msg, increment_progress=inc)
         
         log_cb("Iniciando processo de conversão do PDF...", 5)
-        html_output_path = processar_pdf(file_path, paginas, log_cb=log_cb)
+        html_output_path = processar_pdf(file_path, converter_request_schema, log_cb)
         html_filename = os.path.basename(html_output_path)
         
         task = db.query(TaskModel).filter_by(id=task_id).first()
@@ -193,7 +225,7 @@ def parse_paginas(string_paginas: str, total_paginas: int) -> Optional[List[int]
 
     return sorted(list(paginas))
 
-def pdf_para_imagens(caminho_pdf: str, paginas_selecionadas: List[int], dpi: int = 100, log_cb=None) -> Tuple[str, List[str]]:
+def pdf_para_imagens(caminho_pdf: str, paginas_selecionadas: List[int], dpi, log_cb) -> Tuple[str, List[str]]:
     pdf_basename = os.path.basename(caminho_pdf)
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     pasta_saida = os.path.join('files/temp_processing', f"{pdf_basename}_{timestamp}")
@@ -211,23 +243,26 @@ def pdf_para_imagens(caminho_pdf: str, paginas_selecionadas: List[int], dpi: int
                 
                 image_paths.append(nome_arquivo)
                 logger.info(f"Página {numero_pagina + 1} salva como {nome_arquivo}")
-                if log_cb: log_cb(f"Página {numero_pagina + 1} extraída.", 0)
+                log_cb(f"Página {numero_pagina + 1} extraída.", 0)
     except Exception as e:
         logger.error(f"Erro ao converter PDF para imagens: {e}", exc_info=True)
         raise RuntimeError(f"Erro na conversão PDF para imagem: {e}")
 
     return pasta_saida, image_paths
 
-def analisar_imagens_com_gemini(pdf_basename: str, lista_caminhos: List[str], log_cb=None) -> List[Dict[str, Any]]:
+def analisar_imagens_com_gemini(pdf_basename: str, lista_caminhos: List[str], gemini_model: str, log_cb) -> List[Dict[str, Any]]:
     client = genai.Client(api_key=settings.GOOGLE_API_KEY)
     respostas = []
     total_imgs = len(lista_caminhos)
     inc_per_page = max(1, 65 // total_imgs) if total_imgs > 0 else 0
 
+    logger.info(f"Modelo selecionado: {gemini_model}")
+    log_cb(f"Modelo selecionado: {gemini_model}", 0)
+
     for caminho in lista_caminhos:
         try:
             logger.info(f"Processando: {caminho}...")
-            if log_cb: log_cb(f"Enviando {caminho} para o Google Gemini...", 0)
+            log_cb(f"Processando: {caminho}...", 0)
             
             if not os.path.exists(caminho):
                 raise FileNotFoundError(f"Arquivo não encontrado: {caminho}")
@@ -244,7 +279,7 @@ def analisar_imagens_com_gemini(pdf_basename: str, lista_caminhos: List[str], lo
             prompt = get_prompt(pdf_basename, imagem.size, current_page_num_in_doc)
             
             response = client.models.generate_content(
-                model='gemini-2.5-flash-lite', 
+                model=gemini_model, 
                 contents=[prompt, imagem]
             )
             imagem.close()
@@ -295,13 +330,13 @@ def analisar_imagens_com_gemini(pdf_basename: str, lista_caminhos: List[str], lo
             }
             respostas.append(resposta)
             logger.info("✅ Sucesso!")
-            if log_cb: log_cb(f"✅ Sucesso na pág {current_page_num_in_doc}!", inc_per_page)
+            log_cb(f"✅ Sucesso na pág {current_page_num_in_doc}!", inc_per_page)
             
             time.sleep(2)
             
         except Exception as e:
             logger.error(f"❌ Erro ao processar {caminho}: {e}", exc_info=True)
-            if log_cb: log_cb(f"❌ Erro na pág: {e}", inc_per_page)
+            log_cb(f"❌ Erro na pág: {e}", inc_per_page)
             if 'imagem' in locals() and hasattr(imagem, 'close'):
                 imagem.close()
                 
@@ -365,7 +400,7 @@ def merge_html(pdf_filename_title: str, report_button: bool, content_list: List[
     logger.info(f"HTML salvo com sucesso em: {full_output_path}")
     return full_output_path
 
-def processar_pdf(caminho_pdf: str, string_paginas: str, log_cb):
+def processar_pdf(caminho_pdf: str, converter_request_schema: ConverterRequest, log_cb):
     if not os.path.exists(caminho_pdf):
         raise FileNotFoundError(f"Erro: Arquivo PDF não encontrado em {caminho_pdf}")
 
@@ -376,14 +411,14 @@ def processar_pdf(caminho_pdf: str, string_paginas: str, log_cb):
         raise ValueError(f"Erro ao abrir o PDF {caminho_pdf}: {e}")
     
     log_cb("Iniciando o Parser das Páginas", 5)
-    paginas_selecionadas = parse_paginas(string_paginas, total_paginas)
+    paginas_selecionadas = parse_paginas(converter_request_schema.paginas, total_paginas)
     if paginas_selecionadas is None:
         raise ValueError("Falha no parser de páginas. Verifique o formato inserido.")
     log_cb(f"Páginas a processar: {[p + 1 for p in paginas_selecionadas]}")
     log_cb("Fim do Parse das Páginas\n")
 
     log_cb("Convertendo o PDF para imagens...", 10)
-    pasta_saida, image_paths = pdf_para_imagens(caminho_pdf, paginas_selecionadas, log_cb=log_cb)
+    pasta_saida, image_paths = pdf_para_imagens(caminho_pdf, paginas_selecionadas, converter_request_schema.dpi, log_cb)
     
     if not image_paths: 
         if os.path.exists(pasta_saida):
@@ -394,11 +429,11 @@ def processar_pdf(caminho_pdf: str, string_paginas: str, log_cb):
 
     log_cb("Gerando HTML de cada imagem...")
     pdf_basename = os.path.basename(caminho_pdf)
-    respostas = analisar_imagens_com_gemini(pdf_basename, image_paths, log_cb=log_cb)
+    respostas = analisar_imagens_com_gemini(pdf_basename, image_paths, converter_request_schema.gemini_model, log_cb)
     log_cb("Os HTML foram gerados\n")
 
     log_cb("Mesclando os HTML...", 5)
-    html_output_path = merge_html(pdf_basename, True, respostas)
+    html_output_path = merge_html(pdf_basename, converter_request_schema.report_button, respostas)
     log_cb("HTML Mesclado\n", 5)
     
     log_cb("Limpando arquivos temporários...")
