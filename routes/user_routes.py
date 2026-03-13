@@ -4,7 +4,7 @@ from database import get_db
 from sqlalchemy.orm import Session
 from security import get_password_hash, verify_password, decode_token, oatuh2_schema, create_access_token, dummy_verify
 from pydantic import BaseModel, ConfigDict
-from typing import Optional
+from typing import Optional, List
 from fastapi.security import OAuth2PasswordRequestForm
 
 user_router = APIRouter(prefix="/user", tags=["user"])
@@ -21,11 +21,18 @@ class UserResponse(BaseModel):
     id: int
     username: str
     admin: bool
+
     model_config = ConfigDict(from_attributes=True)
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str
+
+class PaginatedUserResponse(BaseModel):
+    total: int
+    skip: int
+    limit: int
+    tasks: List[UserResponse]
     
 
 @user_router.post("/token", response_model=TokenResponse)
@@ -71,9 +78,36 @@ async def create_user(user_schema: UserCreate, db: Session = Depends(get_db), cu
         db.refresh(new_user)
         return new_user
 
+@user_router.get("/", response_model=PaginatedUserResponse)
+async def get_all_users(skip: int = 0, limit: int = 10, current_user: UserModel = Depends(get_current_user), db: Session = Depends(get_db)):
+    if not current_user.admin:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="UNAUTHORIZED")
+    
+    base_query = db.query(UserModel)
+    total_tasks = base_query.count()
+    tasks = base_query.offset(skip).limit(limit).all()
+
+    return {"total": total_tasks, "skip": skip, "limit": limit, "tasks": tasks}
+
 @user_router.get("/me", response_model=UserResponse)
 async def read_user_me(current_user: UserModel = Depends(get_current_user)):
     return current_user
+
+@user_router.post("/delete/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(user_id: int, current_user: UserModel = Depends(get_current_user), db: Session = Depends(get_db)):
+    if not current_user.admin:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="UNAUTHORIZED")
+    
+    if user_id == current_user.id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="UNAUTHORIZED")
+    
+    user = db.get(UserModel, user_id)
+
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="NOT FOUND")
+    
+    db.delete(user)
+    db.commit()
 
 
 def authenticate_user(username: str, password: str, db: Session):

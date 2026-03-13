@@ -18,17 +18,31 @@ class TaskResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+class PaginatedTaskResponse(BaseModel):
+    total: int
+    skip: int
+    limit: int
+    tasks: List[TaskResponse]
 
-@task_router.get("/", response_model=List[TaskResponse])
+
+@task_router.get("/", response_model=PaginatedTaskResponse)
 async def get_all_tasks(skip: int = 0, limit: int = 10, current_user: UserModel = Depends(get_current_user), db: Session = Depends(get_db)):
     if not current_user.admin:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="UNAUTHORIZED")
     
-    return db.query(TaskModel).offset(skip).limit(limit).all()
+    base_query = db.query(TaskModel)
+    total_tasks = base_query.count()
+    tasks = base_query.offset(skip).limit(limit).all()
 
-@task_router.get("/me", response_model=List[TaskResponse])
+    return {"total": total_tasks, "skip": skip, "limit": limit, "tasks": tasks}
+
+@task_router.get("/me", response_model=PaginatedTaskResponse)
 async def get_all_user_tasks(skip: int = 0, limit: int = 10, current_user: UserModel = Depends(get_current_user), db: Session = Depends(get_db)):
-    return db.query(TaskModel).filter(TaskModel.user_id == current_user.id).offset(skip).limit(limit).all()
+    base_query = db.query(TaskModel).filter(TaskModel.user_id == current_user.id)
+    total_tasks = base_query.count()
+    tasks = base_query.offset(skip).limit(limit).all()
+
+    return {"total": total_tasks, "skip": skip, "limit": limit, "tasks": tasks}
 
 
 @task_router.get("/{task_id}", response_model=TaskResponse)

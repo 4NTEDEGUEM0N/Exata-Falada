@@ -30,7 +30,20 @@
             <h1 class="logo">Exata <span>Falada</span></h1>
             <div class="user-info">
                 <span id="user-display"></span>
-                <button id="logout-btn" class="secondary-btn">Sair</button>
+                <div class="user-menu-wrapper">
+                    <button id="user-menu-btn" class="secondary-btn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                        Menu
+                    </button>
+                    <div id="user-menu-dropdown" class="user-menu-dropdown hidden">
+                        <button id="menu-my-tasks">Minhas Tarefas</button>
+                        <button id="menu-all-tasks" class="admin-only hidden">Todas as Tarefas</button>
+                        <button id="menu-all-users" class="admin-only hidden">Todos os Usuários</button>
+                        <button id="menu-create-user" class="admin-only hidden">Criar Usuário</button>
+                        <hr>
+                        <button id="logout-btn" class="danger-text">Sair</button>
+                    </div>
+                </div>
             </div>
         </header>
 
@@ -161,6 +174,112 @@
                 </section>
             </div>
         </main>
+    </div>
+
+    <!-- Modals -->
+    <div id="modal-overlay" class="modal-overlay hidden">
+        <!-- My Tasks Modal -->
+        <div id="modal-my-tasks" class="modal-content hidden">
+            <div class="modal-header">
+                <h2>Minhas Tarefas</h2>
+                <button class="close-modal-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="table-container">
+                    <table class="tasks-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Arquivo PDF</th>
+                                <th>Status</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="my-tasks-tbody">
+                            <!-- Tasks injected via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- All Tasks Modal (Admin) -->
+        <div id="modal-all-tasks" class="modal-content hidden">
+            <div class="modal-header">
+                <h2>Todas as Tarefas do Sistema <span class="admin-badge">Admin</span></h2>
+                <button class="close-modal-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="table-container">
+                    <table class="tasks-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Usuário ID</th>
+                                <th>Arquivo PDF</th>
+                                <th>Status</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="all-tasks-tbody">
+                            <!-- Tasks injected via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- All Users Modal (Admin) -->
+        <div id="modal-all-users" class="modal-content hidden">
+            <div class="modal-header">
+                <h2>Todos os Usuários <span class="admin-badge">Admin</span></h2>
+                <button class="close-modal-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="table-container">
+                    <table class="tasks-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Usuário</th>
+                                <th>Admin</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="all-users-tbody">
+                            <!-- Users injected via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Create User Modal (Admin) -->
+        <div id="modal-create-user" class="modal-content modal-small hidden">
+            <div class="modal-header">
+                <h2>Novo Usuário <span class="admin-badge">Admin</span></h2>
+                <button class="close-modal-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="create-user-form">
+                    <div class="input-group">
+                        <label for="new-username">Usuário</label>
+                        <input type="text" id="new-username" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="new-password">Senha</label>
+                        <input type="password" id="new-password" required>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="new-is-admin">
+                        <label for="new-is-admin">Conta de Administrador</label>
+                    </div>
+                    
+                    <button type="submit" id="create-user-btn" class="primary-btn" style="margin-top: 1.5rem;">Criar Conta</button>
+                    <p id="create-user-msg" class="msg-text"></p>
+                </form>
+            </div>
+        </div>
     </div>
 
     <script src="app.js"></script>
