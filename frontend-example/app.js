@@ -201,7 +201,7 @@ async function pollStatus() {
     
     const token = localStorage.getItem('token');
     try {
-        const response = await fetch(`${API_URL}/converter/task/${currentTaskId}`, {
+        const response = await fetch(`${API_URL}/converter/status/${currentTaskId}`, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }

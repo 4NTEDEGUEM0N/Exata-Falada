@@ -42,6 +42,8 @@ from routes.user_routes import user_router
 app.include_router(user_router)
 from routes.converter_routes import converter_router
 app.include_router(converter_router)
+from routes.task_router import task_router
+app.include_router(task_router)
 
 @app.get("/")
 def health_check():

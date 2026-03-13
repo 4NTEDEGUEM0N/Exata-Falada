@@ -173,7 +173,7 @@ def task_processar_pdf_background(task_id: int, file_path: str, converter_reques
         db.close()
 
 
-@converter_router.get("/task/{task_id}")
+@converter_router.get("/status/{task_id}")
 async def check_task_status(task_id: int, db: Session = Depends(get_db), current_user: UserModel = Depends(get_current_user)):
     task = db.query(TaskModel).filter(TaskModel.id == task_id).first()
     
