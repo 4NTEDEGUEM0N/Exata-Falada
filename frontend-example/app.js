@@ -101,6 +101,9 @@ async function fetchUserInfo(token) {
                 document.getElementById('admin-settings').classList.remove('hidden');
                 document.querySelectorAll('.admin-only').forEach(el => el.classList.remove('hidden'));
                 userDisplay.innerHTML += ' <span style="color:var(--primary); font-size: 0.8em; font-weight: bold;">[ADMIN]</span>';
+                
+                // Fetch models since the user is an admin
+                fetchModels(token);
             } else {
                 document.getElementById('admin-settings').classList.add('hidden');
                 document.querySelectorAll('.admin-only').forEach(el => el.classList.add('hidden'));
@@ -113,6 +116,43 @@ async function fetchUserInfo(token) {
     } catch (error) {
         console.error('Erro ao buscar usuário:', error);
         logout();
+    }
+}
+
+// Fetch Available Models
+async function fetchModels(token) {
+    try {
+        const response = await fetch(`${API_URL}/converter/models`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            const modelSelect = document.getElementById('model');
+            modelSelect.innerHTML = ''; // Clear loading state
+            
+            // Add default option placeholder
+            const defaultOption = document.createElement('option');
+            defaultOption.value = "";
+            defaultOption.disabled = true;
+            defaultOption.selected = true;
+            defaultOption.textContent = `Padrão: ${data.default_model}`;
+            modelSelect.appendChild(defaultOption);
+
+            // Add all available models
+            data.available_models.forEach(modelName => {
+                const option = document.createElement('option');
+                option.value = modelName;
+                option.textContent = modelName;
+                modelSelect.appendChild(option);
+            });
+        } else {
+            console.error("Erro ao buscar modelos disponíveis");
+        }
+    } catch (error) {
+        console.error("Erro de rede ao buscar modelos:", error);
     }
 }
 

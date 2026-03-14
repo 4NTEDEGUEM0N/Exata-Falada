@@ -40,6 +40,10 @@ class ConverterRequest(BaseModel):
     gemini_model: Optional[str] = settings.DEFAULT_MODEL
     report_button: Optional[bool] = settings.DEFAULT_REPORT_BUTTON
 
+@converter_router.get("/models")
+async def get_models(current_user: UserModel = Depends(get_current_user)):
+    return {"available_models": settings.MODELS_LIST, "default_model": settings.DEFAULT_MODEL}
+
 @converter_router.post("/")
 async def convert_pdf(
     background_tasks: BackgroundTasks, 

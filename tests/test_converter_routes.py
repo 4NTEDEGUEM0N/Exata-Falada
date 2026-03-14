@@ -180,3 +180,16 @@ def test_download_file_not_found_on_disk(client, auth_headers, test_user_id, set
         )
     
     assert response.status_code == 404
+
+def test_get_models(client, auth_headers):
+    response = client.get(
+        "/converter/models",
+        headers=auth_headers
+    )
+    
+    assert response.status_code == 200
+    data = response.json()
+    assert "available_models" in data
+    assert "default_model" in data
+    assert isinstance(data["available_models"], list)
+    assert isinstance(data["default_model"], str)
