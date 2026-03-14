@@ -420,7 +420,7 @@ input[type="file"] {
     font-family: monospace;
 }
 
-#terminal-logs {
+#terminal-logs, #modal-terminal-logs {
     width: 100%;
     height: 250px;
     background-color: transparent;
@@ -431,9 +431,11 @@ input[type="file"] {
     font-size: 0.875rem;
     line-height: 1.5;
     resize: none;
+    box-sizing: border-box;
+    display: block;
 }
 
-#terminal-logs:focus {
+#terminal-logs:focus, #modal-terminal-logs:focus {
     outline: none;
 }
 

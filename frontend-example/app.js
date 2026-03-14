@@ -571,6 +571,12 @@ function renderTasksTable(tasks, tbodyEl, showUserId) {
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
             </button>
         ` : '';
+        
+        const infoBtnHtml = `
+            <button class="action-btn primary-btn btn-icon btn-info" data-id="${task.id}" title="Ver Logs">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+            </button>
+        `;
 
         let columnsHtml = `<td>#${task.id}</td>`;
         if (showUserId) columnsHtml += `<td>${task.user_id}</td>`;
@@ -579,6 +585,7 @@ function renderTasksTable(tasks, tbodyEl, showUserId) {
             <td>${task.pdf_filename}</td>
             <td>${statusHtml}</td>
             <td class="actions-cell">
+                ${infoBtnHtml}
                 ${downloadBtnHtml}
                 <button class="action-btn delete-btn btn-icon btn-delete" data-id="${task.id}" title="Excluir">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
@@ -595,6 +602,30 @@ function renderTasksTable(tasks, tbodyEl, showUserId) {
             });
         }
         
+        tr.querySelector('.btn-info').addEventListener('click', async () => {
+             const titleEl = document.getElementById('modal-task-logs-title');
+             const logsEl = document.getElementById('modal-terminal-logs');
+             titleEl.textContent = `Logs da Tarefa #${task.id}`;
+             logsEl.value = 'Buscando logs...';
+             openModal(document.getElementById('modal-task-logs'));
+             
+             const token = localStorage.getItem('token');
+             try {
+                 const response = await fetch(`${API_URL}/converter/status/${task.id}`, {
+                     headers: { 'Authorization': `Bearer ${token}` }
+                 });
+                 if (response.ok) {
+                     const detail = await response.json();
+                     logsEl.value = detail.logs || 'Nenhum log registrado para esta tarefa.';
+                     logsEl.scrollTop = logsEl.scrollHeight;
+                 } else {
+                     logsEl.value = 'Erro ao carregar os logs da tarefa.';
+                 }
+             } catch (error) {
+                 logsEl.value = 'Erro de rede ao buscar os logs.';
+             }
+        });
+
         tr.querySelector('.btn-delete').addEventListener('click', async (e) => {
             const btn = e.currentTarget;
             btn.disabled = true;
