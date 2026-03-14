@@ -1,4 +1,11 @@
-const API_URL = 'http://localhost:8000';
+let API_URL = '';
+
+if (window.location.hostname === 'exatafalada.duckdns.org') {
+    API_URL = '/api'; 
+} else {
+    API_URL = 'http://127.0.0.1:8000'; 
+}
+
 let currentTaskId = null;
 let pollingInterval = null;
 

@@ -315,12 +315,15 @@ def analisar_imagens_com_gemini(pdf_basename: str, lista_caminhos: List[str], ge
 
             if html_body is None:
                 logger.warning(f"Aviso: Falha ao extrair HTML para {pdf_basename} (pág {current_page_num_in_doc}).")
+                log_cb(f"Aviso: Falha ao extrair HTML para {pdf_basename} (pág {current_page_num_in_doc}).")
                 if response:
                     logger.warning(f"Texto bruto (300c): {str(response.text)[:300]}...")
                     try:
                         logger.warning(f"Motivo: {final_finish_reason} ({response.candidates[0].finish_reason.name})")
+                        log_cb(f"Motivo: {final_finish_reason} ({response.candidates[0].finish_reason.name})")
                     except AttributeError:
                         logger.warning(f"Motivo: {final_finish_reason}")
+                        log_cb(f"Motivo: {final_finish_reason}")
             
             resposta = {
                 "page_num_in_doc": current_page_num_in_doc, 
