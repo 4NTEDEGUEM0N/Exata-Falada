@@ -209,6 +209,54 @@ button:disabled {
     cursor: not-allowed;
 }
 
+/* Public Access Login Section */
+.universal-access-container {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px dashed var(--border);
+    text-align: center;
+}
+
+.universal-access-container p {
+    margin-bottom: 1rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.public-btn {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.75rem 1.5rem;
+    background-color: var(--surface);
+    border: 1px solid var(--primary);
+    color: var(--primary);
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.3s ease;
+}
+
+.public-btn:hover {
+    background-color: var(--primary);
+    color: white;
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
+}
+
+.public-btn svg {
+    transition: transform 0.3s ease;
+}
+
+.public-btn:hover svg {
+    transform: rotate(15deg) scale(1.1);
+}
+
 /* File Upload */
 .file-drop-area {
     position: relative;
