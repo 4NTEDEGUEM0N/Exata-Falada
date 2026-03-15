@@ -300,10 +300,16 @@ async function pollStatus() {
             }
 
             // Update Progress Bar
-            updateProgressUI(data.progress, data.status, (data.status === 'Completed' ? 'Concluído' : 'Processando'));
+            let statusText = 'Processando';
+            if (data.status === 'Completed') statusText = 'Concluído';
+            else if (data.status === 'Completed with errors') statusText = 'Concluído c/ erros';
+            else if (data.status === 'Error') statusText = 'Falhou';
+            else statusText = 'Processando';
+
+            updateProgressUI(data.progress, data.status, statusText);
 
             // Handle Complete
-            if (data.status === 'Completed') {
+            if (data.status === 'Completed' || data.status === 'Completed with errors') {
                 clearInterval(pollingInterval);
                 convertBtn.disabled = false;
                 convertBtn.textContent = 'Nova Conversão';
@@ -317,7 +323,6 @@ async function pollStatus() {
                 clearInterval(pollingInterval);
                 convertBtn.disabled = false;
                 convertBtn.textContent = 'Tentar Novamente';
-                updateProgressUI(data.progress, 'Error', 'Erro');
             }
         }
     } catch (error) {
@@ -333,8 +338,17 @@ function updateProgressUI(percentage, status, statusText) {
     statusBadge.className = 'badge';
     
     if (status === 'Completed') statusBadge.classList.add('badge-completed');
+    else if (status === 'Completed with errors') {
+        statusBadge.classList.add('badge-completed');
+        statusBadge.style.backgroundColor = '#f39c12'; // Laranja para aviso
+        statusBadge.style.color = '#fff';
+    }
     else if (status === 'Error') statusBadge.classList.add('badge-error');
-    else statusBadge.classList.add('badge-processing');
+    else {
+        statusBadge.classList.add('badge-processing');
+        statusBadge.style.backgroundColor = ''; // Reset
+        statusBadge.style.color = '';
+    }
 }
 
 async function downloadFile(filename) {
@@ -561,11 +575,12 @@ function renderTasksTable(tasks, tbodyEl, showUserId) {
         
         let statusHtml = '';
         if (task.status === 'Completed') statusHtml = '<span class="status-cell status-completed">Concluída</span>';
+        else if (task.status === 'Completed with errors') statusHtml = '<span class="status-cell status-completed" style="background-color: #f39c12; color: #fff;">Concluída c/ Erros</span>';
         else if (task.status === 'Error') statusHtml = '<span class="status-cell status-error">Erro</span>';
         else statusHtml = '<span class="status-cell status-processing">Processando</span>';
 
         // Check if download is possible
-        const isCompleted = task.status === 'Completed' && task.html_filename;
+        const isCompleted = (task.status === 'Completed' || task.status === 'Completed with errors') && task.html_filename;
         const downloadBtnHtml = isCompleted ? `
             <button class="action-btn success-btn btn-icon btn-download" data-filename="${task.html_filename}" title="Baixar">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>

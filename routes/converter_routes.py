@@ -31,6 +31,7 @@ class TaskStatusEnum(str, Enum):
     CREATED = "Created"
     PROCESSING = "Processing"
     COMPLETED = "Completed"
+    COMPLETED_WITH_ERRORS = "Completed with errors"
     ERROR = "Error"
 
 class ConverterRequest(BaseModel):
@@ -147,6 +148,8 @@ def log_to_task(db_session: Session, task_id: int, message: str, increment_progr
 
 def task_processar_pdf_background(task_id: int, file_path: str, converter_request_schema: ConverterRequest):
     db: Session = SessionLocal()
+    import threading
+    db_lock = threading.Lock()
     try:
         task = db.query(TaskModel).filter_by(id=task_id).first()
         if task:
@@ -154,19 +157,28 @@ def task_processar_pdf_background(task_id: int, file_path: str, converter_reques
             db.commit()
 
         def log_cb(msg, inc=0):
-            log_to_task(db, task_id, msg, increment_progress=inc)
+            with db_lock:
+                thread_db = SessionLocal()
+                try:
+                    log_to_task(thread_db, task_id, msg, increment_progress=inc)
+                finally:
+                    thread_db.close()
         
         log_cb("Iniciando processo de conversão do PDF...", 5)
-        html_output_path = processar_pdf(file_path, converter_request_schema, log_cb)
+        html_output_path, tem_erros = processar_pdf(file_path, converter_request_schema, log_cb)
         html_filename = os.path.basename(html_output_path)
         
         task = db.query(TaskModel).filter_by(id=task_id).first()
         if task:
-            task.status = TaskStatusEnum.COMPLETED
+            task.status = TaskStatusEnum.COMPLETED_WITH_ERRORS if tem_erros else TaskStatusEnum.COMPLETED
             task.progress = 100
             task.html_filename = html_filename
             db.commit()
-        log_cb("Finalizado com sucesso! HTML pronto para download.", 0)
+            
+        if tem_erros:
+            log_cb("Finalizado com alguns erros! HTML parcialmente pronto para download.", 0)
+        else:
+            log_cb("Finalizado com sucesso! HTML pronto para download.", 0)
     except Exception as e:
         task = db.query(TaskModel).filter_by(id=task_id).first()
         if task:
@@ -184,7 +196,7 @@ async def check_task_status(task_id: int, db: Session = Depends(get_db), current
     if not task:
          raise HTTPException(status_code=404, detail="Tarefa não encontrada")
          
-    if task.user_id != current_user.id:
+    if task.user_id != current_user.id and not current_user.admin:
          raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Acesso negado")
          
     return {
@@ -254,109 +266,152 @@ def pdf_para_imagens(caminho_pdf: str, paginas_selecionadas: List[int], dpi, log
 
     return pasta_saida, image_paths
 
-def analisar_imagens_com_gemini(pdf_basename: str, lista_caminhos: List[str], gemini_model: str, log_cb) -> List[Dict[str, Any]]:
+def processar_imagem(caminho: str, pdf_basename: str, client: genai.Client, gemini_model: str, inc_per_page: int, log_cb):
+    try:
+        logger.info(f"Processando: {caminho}...")
+        log_cb(f"Processando: {caminho}...", 0)
+        
+        if not os.path.exists(caminho):
+            raise FileNotFoundError(f"Arquivo não encontrado: {caminho}")
+            
+        imagem = Image.open(caminho)
+
+        with open(caminho, "rb") as image_file:
+            image_data = image_file.read()
+
+        match_pagina = re.search(r"pagina_(\d+)\.png$", caminho)
+        current_page_num_in_doc = match_pagina.group(1) if match_pagina else "Desconhecida"
+        
+        base64_image_data = base64.b64encode(image_data).decode('utf-8')
+        prompt = get_prompt(pdf_basename, imagem.size, current_page_num_in_doc)
+        
+        MAX_RETRIES = settings.MAX_RETRIES
+        response = None
+        
+        for attempt in range(MAX_RETRIES):
+            try:
+                response = client.models.generate_content(
+                    model=gemini_model, 
+                    contents=[prompt, imagem]
+                )
+                break
+            except Exception as e:
+                if attempt < MAX_RETRIES - 1:
+                    wait_time = 2 ** attempt * 5
+                    logger.warning(f"Erro na API (tentativa {attempt + 1} de {MAX_RETRIES}) para pág. {current_page_num_in_doc}: {e}. Aguardando {wait_time}s...")
+                    log_cb(f"⚠️ Erro na pág {current_page_num_in_doc} (tentativa {attempt + 1}/{MAX_RETRIES}): aguardando {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    raise e
+
+        imagem.close()
+
+        final_finish_reason = 'UNKNOWN'
+        html_body = None
+        
+        if response and response.candidates:
+            candidate = response.candidates[0]
+            final_finish_reason = candidate.finish_reason.name if candidate.finish_reason else 'UNKNOWN'
+
+            response_text_content = response.text
+            if not response_text_content and candidate.content and candidate.content.parts:
+                response_text_content = ''.join(
+                    part.text for part in candidate.content.parts if hasattr(part, 'text') and part.text
+                )
+
+            if response_text_content:
+                match = re.search(r"```html\s*(.*?)\s*```", response_text_content, re.DOTALL | re.IGNORECASE)
+                if match:
+                    html_body = match.group(1).strip()
+                else:
+                    trimmed_text = response_text_content.strip()
+                    if trimmed_text.startswith("<") and trimmed_text.endswith(">") and \
+                        re.search(r"<p|<div|<span|<table|<ul|<ol|<h[1-6]", trimmed_text, re.IGNORECASE):
+                        html_body = trimmed_text
+                        
+                if html_body:
+                    html_body = re.sub(r'<bdi>([a-zA-Z0-9_](?:<sup>.*?</sup>)?)</bdi>', r'\1', html_body)
+                    html_body = re.sub(r'<bdi>(\\[a-zA-Z]+(?:\{.*?\})?(?:\s*\^\{.*?\})?(?:\s*_\{.*?\})?)</bdi>', r'\1',
+                                        html_body)
+                    html_body = re.sub(r'<bdi>\s*</bdi>', '', html_body)
+
+        if html_body is None:
+            logger.warning(f"Aviso: Falha ao extrair HTML para {pdf_basename} (pág {current_page_num_in_doc}).")
+            log_cb(f"Aviso: Falha ao extrair HTML para {pdf_basename} (pág {current_page_num_in_doc}).")
+            if response:
+                logger.warning(f"Texto bruto (300c): {str(response.text)[:300]}...")
+                try:
+                    logger.warning(f"Motivo: {final_finish_reason} ({response.candidates[0].finish_reason.name})")
+                    log_cb(f"Motivo: {final_finish_reason} ({response.candidates[0].finish_reason.name})")
+                except AttributeError:
+                    logger.warning(f"Motivo: {final_finish_reason}")
+                    log_cb(f"Motivo: {final_finish_reason}")
+        
+        resposta = {
+            "page_num_in_doc": current_page_num_in_doc, 
+            "body": html_body, 
+            "base64_image": base64_image_data,
+            "status": "success" if html_body else "error"
+        }
+        if html_body is None:
+            resposta["error_msg"] = "HTML não pôde ser extraído da resposta do modelo."
+
+        if html_body:
+            logger.info("✅ Sucesso!")
+            log_cb(f"✅ Sucesso na pág {current_page_num_in_doc}!", inc_per_page)
+        else:
+            log_cb(f"⚠️ Pág {current_page_num_in_doc} processada, mas falhou ao extrair HTML.", inc_per_page)
+        
+        time.sleep(2)
+        return resposta
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao processar {caminho}: {e}", exc_info=True)
+        
+        match_pagina = re.search(r"pagina_(\d+)\.png$", caminho)
+        current_page_num = match_pagina.group(1) if match_pagina else "Desconhecida"
+        
+        error_str = str(e)
+        if len(error_str) > 150:
+            error_str = error_str[:147] + "..."
+            
+        log_cb(f"❌ Erro na pág {current_page_num}: {error_str}", inc_per_page)
+        
+        if 'imagem' in locals() and hasattr(imagem, 'close'):
+            imagem.close()
+            
+        return {
+            "page_num_in_doc": current_page_num,
+            "body": None,
+            "base64_image": None,
+            "status": "error",
+            "error_msg": str(e)
+        }
+
+def analisar_imagens_com_gemini(pdf_basename: str, lista_caminhos: List[str], gemini_model: str, gemini_workers: int, log_cb) -> List[Dict[str, Any]]:
+    import concurrent.futures
+    from functools import partial
     client = genai.Client(api_key=settings.GOOGLE_API_KEY)
-    respostas = []
     total_imgs = len(lista_caminhos)
     inc_per_page = max(1, 65 // total_imgs) if total_imgs > 0 else 0
 
     logger.info(f"Modelo selecionado: {gemini_model}")
     log_cb(f"Modelo selecionado: {gemini_model}", 0)
 
-    for caminho in lista_caminhos:
-        try:
-            logger.info(f"Processando: {caminho}...")
-            log_cb(f"Processando: {caminho}...", 0)
+    func_processar = partial(
+        processar_imagem, 
+        pdf_basename=pdf_basename, 
+        client=client, 
+        gemini_model=gemini_model, 
+        inc_per_page=inc_per_page, 
+        log_cb=log_cb
+    )
             
-            if not os.path.exists(caminho):
-                raise FileNotFoundError(f"Arquivo não encontrado: {caminho}")
-                
-            imagem = Image.open(caminho)
-
-            with open(caminho, "rb") as image_file:
-                image_data = image_file.read()
-
-            match_pagina = re.search(r"pagina_(\d+)\.png$", caminho)
-            current_page_num_in_doc = match_pagina.group(1) if match_pagina else "Desconhecida"
-            
-            base64_image_data = base64.b64encode(image_data).decode('utf-8')
-            prompt = get_prompt(pdf_basename, imagem.size, current_page_num_in_doc)
-            
-            response = client.models.generate_content(
-                model=gemini_model, 
-                contents=[prompt, imagem]
-            )
-            imagem.close()
-
-            final_finish_reason = 'UNKNOWN'
-            html_body = None
-            
-            if response and response.candidates:
-                candidate = response.candidates[0]
-                final_finish_reason = candidate.finish_reason.name if candidate.finish_reason else 'UNKNOWN'
-
-                response_text_content = response.text
-                if not response_text_content and candidate.content and candidate.content.parts:
-                    response_text_content = ''.join(
-                        part.text for part in candidate.content.parts if hasattr(part, 'text') and part.text
-                    )
-
-                if response_text_content:
-                    match = re.search(r"```html\s*(.*?)\s*```", response_text_content, re.DOTALL | re.IGNORECASE)
-                    if match:
-                        html_body = match.group(1).strip()
-                    else:
-                        trimmed_text = response_text_content.strip()
-                        if trimmed_text.startswith("<") and trimmed_text.endswith(">") and \
-                            re.search(r"<p|<div|<span|<table|<ul|<ol|<h[1-6]", trimmed_text, re.IGNORECASE):
-                            html_body = trimmed_text
-                            
-                    if html_body:
-                        html_body = re.sub(r'<bdi>([a-zA-Z0-9_](?:<sup>.*?</sup>)?)</bdi>', r'\1', html_body)
-                        html_body = re.sub(r'<bdi>(\\[a-zA-Z]+(?:\{.*?\})?(?:\s*\^\{.*?\})?(?:\s*_\{.*?\})?)</bdi>', r'\1',
-                                            html_body)
-                        html_body = re.sub(r'<bdi>\s*</bdi>', '', html_body)
-
-            if html_body is None:
-                logger.warning(f"Aviso: Falha ao extrair HTML para {pdf_basename} (pág {current_page_num_in_doc}).")
-                log_cb(f"Aviso: Falha ao extrair HTML para {pdf_basename} (pág {current_page_num_in_doc}).")
-                if response:
-                    logger.warning(f"Texto bruto (300c): {str(response.text)[:300]}...")
-                    try:
-                        logger.warning(f"Motivo: {final_finish_reason} ({response.candidates[0].finish_reason.name})")
-                        log_cb(f"Motivo: {final_finish_reason} ({response.candidates[0].finish_reason.name})")
-                    except AttributeError:
-                        logger.warning(f"Motivo: {final_finish_reason}")
-                        log_cb(f"Motivo: {final_finish_reason}")
-            
-            resposta = {
-                "page_num_in_doc": current_page_num_in_doc, 
-                "body": html_body, 
-                "base64_image": base64_image_data,
-                "status": "success"
-            }
-            respostas.append(resposta)
-            logger.info("✅ Sucesso!")
-            log_cb(f"✅ Sucesso na pág {current_page_num_in_doc}!", inc_per_page)
-            
-            time.sleep(2)
-            
-        except Exception as e:
-            logger.error(f"❌ Erro ao processar {caminho}: {e}", exc_info=True)
-            log_cb(f"❌ Erro na pág: {e}", inc_per_page)
-            if 'imagem' in locals() and hasattr(imagem, 'close'):
-                imagem.close()
-                
-            match_pagina = re.search(r"pagina_(\d+)\.png$", caminho)
-            current_page_num = match_pagina.group(1) if match_pagina else "Desconhecida"
-            respostas.append({
-                "page_num_in_doc": current_page_num,
-                "body": None,
-                "base64_image": None,
-                "status": "error",
-                "error_msg": str(e)
-            })
-            
+    respostas = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=gemini_workers) as executor:
+        results = executor.map(func_processar, lista_caminhos)
+        respostas = list(results)
+        
     return respostas
 
 def merge_html(pdf_filename_title: str, report_button: bool, content_list: List[Dict[str, Any]]):
@@ -436,7 +491,7 @@ def processar_pdf(caminho_pdf: str, converter_request_schema: ConverterRequest, 
 
     log_cb("Gerando HTML de cada imagem...")
     pdf_basename = os.path.basename(caminho_pdf)
-    respostas = analisar_imagens_com_gemini(pdf_basename, image_paths, converter_request_schema.gemini_model, log_cb)
+    respostas = analisar_imagens_com_gemini(pdf_basename, image_paths, converter_request_schema.gemini_model, converter_request_schema.gemini_workers, log_cb)
     log_cb("Os HTML foram gerados\n")
 
     log_cb("Mesclando os HTML...", 5)
@@ -450,5 +505,6 @@ def processar_pdf(caminho_pdf: str, converter_request_schema: ConverterRequest, 
     except Exception as e:
         logger.warning(f"Aviso: Não foi possível remover a pasta temporária {pasta_saida}: {e}")
     
-    return html_output_path
+    tem_erros = any(r.get("status") == "error" or r.get("body") is None for r in respostas)
+    return html_output_path, tem_erros
 
