@@ -1,5 +1,14 @@
 # Exata-Falada
 
+##### Refatoração completa do repositório original: https://github.com/Felipe-Loureiro/Exata-Falada
+
+## Sobre o Projeto
+O **Exata-Falada** é um conversor de material didático em PDF para HTML. 
+
+A demanda por essa ferramenta surgiu a partir da dificuldade que alunos com deficiência visual encontram para conseguir realmente acessar e compreender o material didático que recebem. O formato HTML apresenta grandes vantagens em relação ao PDF para esse tipo de estudante: por ser uma linguagem semântica e estruturada, ele permite que os leitores de tela naveguem com muito mais facilidade pelos conteúdos, cabeçalhos e elementos da página. Além disso, o HTML facilita a aplicação de personalizações visuais essenciais para pessoas com baixa visão, como ajustes de alto contraste, ampliação do tamanho da fonte e alteração de cores, o que no PDF costuma ser muito limitado ou inacessível.
+
+O nome **Exata Falada** vem da enorme barreira que leitores de tela enfrentam ao tentar ler equações matemáticas. Por isso, uma das principais *features* da nossa conversão é conseguir identificar e transcrever essas equações de maneira correta, garantindo que elas sejam lidas e compreendidas de forma adequada.
+
 ## Requirements / Instalação
 
 Siga os passos abaixo para preparar o ambiente e rodar o projeto localmente:
