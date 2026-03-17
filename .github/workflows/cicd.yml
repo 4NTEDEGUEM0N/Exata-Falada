@@ -12,6 +12,13 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
 
+    env:
+      SECRET_KEY: ${{ secrets.SECRET_KEY || 'chave_default_testes' }}
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY || 'chave_mock_google' }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL || 'sqlite:///./test.db' }}
+      ADMIN_USER: ${{ secrets.ADMIN_USER || 'adminteste' }}
+      ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD || 'adminteste' }}
+
     steps:
     - name: Checkout do código
       uses: actions/checkout@v3
