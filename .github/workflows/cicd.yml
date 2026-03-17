@@ -1,0 +1,60 @@
+name: FastAPI CI/CD Pipeline
+
+# O pipeline será acionado sempre que houver um push na branch "main"
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  # ==========================================
+  # FASE DE CI: Integração Contínua (Testes)
+  # ==========================================
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout do código
+      uses: actions/checkout@v3
+
+    - name: Configurar o Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.13"
+
+    - name: Instalar dependências
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest httpx
+
+    - name: Executar testes automatizados
+      run: |
+        pytest tests/
+
+  # ==========================================
+  # FASE DE CD: Implantação Contínua (Deploy)
+  # ==========================================
+  deploy:
+    # Só executa o deploy se os testes passarem
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Deploy via SSH no servidor
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        # Script que será executado dentro do seu servidor
+        script: |
+          cd /var/www/Exata-Falada
+          git pull origin main
+          
+          # Ativar ambiente virtual e instalar novas dependências
+          source venv/bin/activate
+          pip install -r requirements.txt
+          
+          # Reiniciar os serviços da aplicação web
+          sudo pm2 restart exata-falada
+          sudo systemctl restart nginx
