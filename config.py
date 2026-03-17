@@ -1,19 +1,40 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import Literal
+from pydantic import model_validator
 import os
 
 class Settings(BaseSettings):
-    # .env keys
+    """ .env keys """
     SECRET_KEY: str
     GOOGLE_API_KEY: str
     DATABASE_URL: str
     ADMIN_USER: str
     ADMIN_PASSWORD: str
+
+    STORAGE_PROVIDER: Literal["aws", "oracle", "local"] = "local"
     
-    # Default variables
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30 
-    ALGORITHM: str = "HS256"
+    # === Credenciais AWS S3 (Opcionais) ===
+    AWS_ACCESS_KEY_ID: str | None = None
+    AWS_SECRET_ACCESS_KEY: str | None = None
+    AWS_BUCKET_NAME: str | None = None
+    AWS_REGION: str | None = None
+
+    # === Credenciais Oracle OCI (Opcionais) ===
+    OCI_ACCESS_KEY_ID: str | None = None
+    OCI_SECRET_ACCESS_KEY: str | None = None
+    OCI_BUCKET_NAME: str | None = None
+    OCI_REGION: str | None = None
+    OCI_NAMESPACE: str | None = None
+    OCI_ENDPOINT_URL: str | None = None # Gerado automaticamente no model validator
+
+    # === Credenciais Local ===
     UPLOAD_DIR: str = "files/uploads"
     OUTPUT_DIR: str = "files/output"
+
+
+    """ Default variables """
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30 
+    ALGORITHM: str = "HS256"
     MAX_FILE_SIZE: int = 50 * 1024 * 1024
     DEFAULT_DPI: int = 100
     DEFAULT_GEMINI_WORKERS: int = 4
@@ -23,6 +44,20 @@ class Settings(BaseSettings):
     MAX_RETRIES: int = 3
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+    @model_validator(mode='after')
+    def check_storage_credentials(self):
+        if self.STORAGE_PROVIDER == "aws":
+            if not all([self.AWS_ACCESS_KEY_ID, self.AWS_SECRET_ACCESS_KEY, self.AWS_BUCKET_NAME, self.AWS_REGION]):
+                raise ValueError("Você escolheu 'aws' como STORAGE_PROVIDER, mas faltam credenciais da AWS no .env!")
+        
+        elif self.STORAGE_PROVIDER == "oracle":
+            if not all([self.OCI_ACCESS_KEY_ID, self.OCI_SECRET_ACCESS_KEY, self.OCI_BUCKET_NAME, self.OCI_REGION, self.OCI_NAMESPACE]):
+                raise ValueError("Você escolheu 'oracle' como STORAGE_PROVIDER, mas faltam credenciais do OCI no .env!")
+            
+            self.OCI_ENDPOINT_URL = f"https://{self.OCI_NAMESPACE}.compat.objectstorage.{self.OCI_REGION}.oraclecloud.com"
+        
+        return self
 
 settings = Settings()
 if not os.path.exists(settings.OUTPUT_DIR):

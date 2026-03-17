@@ -27,6 +27,7 @@ def test_user_id(client, auth_headers):
     me_response = client.get("/user/me", headers=auth_headers)
     return me_response.json()["id"]
 
+@patch('routes.converter_routes.settings.STORAGE_PROVIDER', 'local')
 @patch('routes.converter_routes.processar_pdf')
 @patch('routes.converter_routes.shutil.copyfileobj')
 @patch('builtins.open', new_callable=mock_open)
@@ -91,6 +92,7 @@ def test_convert_pdf_huge_file(mock_settings, client, auth_headers):
     assert response.status_code == 413
     assert response.json() == {"detail": "Arquivo muito grande. O limite é 50MB."}
 
+@patch('routes.converter_routes.settings.STORAGE_PROVIDER', 'local')
 @patch('routes.converter_routes.processar_pdf')
 @patch('routes.converter_routes.shutil.copyfileobj')
 @patch('builtins.open', new_callable=mock_open)
@@ -122,13 +124,14 @@ def test_download_file_success(client, auth_headers, test_user_id, setup_db, tmp
         pdf_filename="test.pdf",
         status=TaskStatusEnum.COMPLETED,
         user_id=test_user_id,
-        html_filename="dummy_output.html"
+        html_filename="dummy_output.html",
+        storage_provider="local"
     )
     setup_db.add(task)
     setup_db.commit()
 
     # 3. Use patch for settings.OUTPUT_DIR pointing to tmp_path
-    with patch('routes.converter_routes.settings.OUTPUT_DIR', str(tmp_path)):
+    with patch('routes.converter_routes.settings.OUTPUT_DIR', str(tmp_path)), patch('routes.converter_routes.settings.STORAGE_PROVIDER', 'local'):
         response = client.get(
             "/converter/download/dummy_output.html",
             headers=auth_headers
@@ -137,20 +140,24 @@ def test_download_file_success(client, auth_headers, test_user_id, setup_db, tmp
     assert response.status_code == 200
     assert response.text == "<html><body>hello</body></html>"
 
-def test_download_file_unauthorized_user(client, other_user_auth_headers, test_user_id, setup_db, tmp_path):
+def test_download_file_unauthorized_user(client, auth_headers, other_user_auth_headers, setup_db, tmp_path):
+    me_response = client.get("/user/me", headers=other_user_auth_headers)
+    admin_id = me_response.json()["id"]
+
     task = TaskModel(
         pdf_filename="test_private.pdf",
         status=TaskStatusEnum.COMPLETED,
-        user_id=test_user_id,
-        html_filename="private_output.html"
+        user_id=admin_id,
+        html_filename="private_output.html",
+        storage_provider="local"
     )
     setup_db.add(task)
     setup_db.commit()
 
-    with patch('routes.converter_routes.settings.OUTPUT_DIR', str(tmp_path)):
+    with patch('routes.converter_routes.settings.OUTPUT_DIR', str(tmp_path)), patch('routes.converter_routes.settings.STORAGE_PROVIDER', 'local'):
         response = client.get(
             "/converter/download/private_output.html",
-            headers=other_user_auth_headers
+            headers=auth_headers
         )
     
     assert response.status_code == 401
@@ -168,12 +175,13 @@ def test_download_file_not_found_on_disk(client, auth_headers, test_user_id, set
         pdf_filename="test_missing.pdf",
         status=TaskStatusEnum.COMPLETED,
         user_id=test_user_id,
-        html_filename="missing_on_disk.html"
+        html_filename="missing_on_disk.html",
+        storage_provider="local"
     )
     setup_db.add(task)
     setup_db.commit()
 
-    with patch('routes.converter_routes.settings.OUTPUT_DIR', str(tmp_path)):
+    with patch('routes.converter_routes.settings.OUTPUT_DIR', str(tmp_path)), patch('routes.converter_routes.settings.STORAGE_PROVIDER', 'local'):
         response = client.get(
             "/converter/download/missing_on_disk.html",
             headers=auth_headers

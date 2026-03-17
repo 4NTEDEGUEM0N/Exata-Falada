@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request, BackgroundTasks, Form
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from config import settings
 import os
 import shutil
@@ -20,12 +20,35 @@ from .user_routes import get_current_user
 from sqlalchemy.orm import Session
 from enum import Enum
 from pydantic import BaseModel
+import threading
+import concurrent.futures
+from functools import partial
+import boto3
+from botocore.exceptions import ClientError
+from botocore.client import Config
+import tempfile
 
 import logging
 
 logger = logging.getLogger(__name__)
 
 converter_router = APIRouter(prefix="/converter", tags=["converter"])
+
+if settings.STORAGE_PROVIDER == "aws":
+    storage_client = boto3.client('s3', region_name=settings.AWS_REGION)
+elif settings.STORAGE_PROVIDER == "oracle":
+    config = Config(
+        request_checksum_calculation="WHEN_REQUIRED",
+        response_checksum_validation="WHEN_REQUIRED"
+    )
+    storage_client = boto3.client(
+        's3',
+        region_name=settings.OCI_REGION,
+        endpoint_url=settings.OCI_ENDPOINT_URL,
+        aws_access_key_id=settings.OCI_ACCESS_KEY_ID,
+        aws_secret_access_key=settings.OCI_SECRET_ACCESS_KEY,
+        config = config
+    )
 
 class TaskStatusEnum(str, Enum):
     CREATED = "Created"
@@ -78,7 +101,7 @@ async def convert_pdf(
     )
 
     pdf_filename = re.sub(r'[^a-zA-Z0-9.\-_]', '_', file.filename)
-    task_data = {"pdf_filename": pdf_filename, "status": TaskStatusEnum.CREATED, "user_id": current_user.id}
+    task_data = {"pdf_filename": pdf_filename, "status": TaskStatusEnum.CREATED, "user_id": current_user.id, "storage_provider": settings.STORAGE_PROVIDER}
     new_task = TaskModel(**task_data)
     db.add(new_task)
     db.commit()
@@ -88,8 +111,16 @@ async def convert_pdf(
     file_path = os.path.join(settings.UPLOAD_DIR, unique_filename)
 
     try:
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        if settings.STORAGE_PROVIDER == "local":
+            file_path = os.path.join(settings.UPLOAD_DIR, unique_filename)
+            with open(file_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+        elif settings.STORAGE_PROVIDER == "aws":
+            file_path = f"uploads/{unique_filename}"
+            storage_client.upload_fileobj(file.file, settings.AWS_BUCKET_NAME, file_path)
+        elif settings.STORAGE_PROVIDER == "oracle":
+            file_path = f"uploads/{unique_filename}"
+            storage_client.upload_fileobj(file.file, settings.OCI_BUCKET_NAME, file_path)
 
         background_tasks.add_task(task_processar_pdf_background, new_task.id, file_path, converter_request_schema)
 
@@ -121,19 +152,48 @@ async def baixar_arquivo(filename: str, db: Session = Depends(get_db), current_u
     if not task:
         raise HTTPException(status_code=404, detail="Arquivo não encontrado ou já expirou.")
     
-    if task.user_id != current_user.id:
+    if task.user_id != current_user.id and not current_user.admin:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="UNAUTHORIZED")
-
-    file_path = os.path.join(settings.OUTPUT_DIR, filename)
     
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="Arquivo não encontrado ou já expirou.")
+    if task.storage_provider == "local":
+        file_path = os.path.join(settings.OUTPUT_DIR, filename)
         
-    return FileResponse(
-        path=file_path,
-        filename=filename,
-        media_type='application/octet-stream'
-    )
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail="Arquivo não encontrado ou já expirou.")
+            
+        return FileResponse(
+            path=file_path,
+            filename=filename,
+            media_type='application/octet-stream'
+        )
+    elif task.storage_provider == "aws":
+        try:
+            storage_client.head_object(Bucket=settings.AWS_BUCKET_NAME, Key=f"outputs/{task.html_filename}")
+            url = storage_client.generate_presigned_url('get_object',
+                    Params={'Bucket': settings.AWS_BUCKET_NAME, 'Key': f"outputs/{task.html_filename}",
+                            'ResponseContentDisposition': f'attachment; filename="{task.html_filename}"'},
+                    ExpiresIn=300
+                )
+            return RedirectResponse(url)
+        except ClientError as e:
+            if e.response['Error']['Code'] == '404':
+                raise HTTPException(status_code=404, detail="Arquivo não encontrado no storage.")
+            logger.error(f"Erro na AWS: {e}")
+            raise HTTPException(status_code=500, detail="Erro no storage provider.")
+    elif task.storage_provider == "oracle":
+        try:
+            storage_client.head_object(Bucket=settings.OCI_BUCKET_NAME, Key=f"outputs/{task.html_filename}")
+            url = storage_client.generate_presigned_url('get_object',
+                    Params={'Bucket': settings.OCI_BUCKET_NAME, 'Key': f"outputs/{task.html_filename}",
+                            'ResponseContentDisposition': f'attachment; filename="{task.html_filename}"'},
+                    ExpiresIn=300
+                )
+            return RedirectResponse(url)
+        except ClientError as e:
+            if e.response['Error']['Code'] == '404':
+                raise HTTPException(status_code=404, detail="Arquivo não encontrado no storage.")
+            logger.error(f"Erro no Oracle OCI: {e}")
+            raise HTTPException(status_code=500, detail="Erro no storage provider.")
 
 
 def log_to_task(db_session: Session, task_id: int, message: str, increment_progress: int = 0):
@@ -148,7 +208,6 @@ def log_to_task(db_session: Session, task_id: int, message: str, increment_progr
 
 def task_processar_pdf_background(task_id: int, file_path: str, converter_request_schema: ConverterRequest):
     db: Session = SessionLocal()
-    import threading
     db_lock = threading.Lock()
     try:
         task = db.query(TaskModel).filter_by(id=task_id).first()
@@ -263,6 +322,10 @@ def pdf_para_imagens(caminho_pdf: str, paginas_selecionadas: List[int], dpi, log
     except Exception as e:
         logger.error(f"Erro ao converter PDF para imagens: {e}", exc_info=True)
         raise RuntimeError(f"Erro na conversão PDF para imagem: {e}")
+    finally:
+        if settings.STORAGE_PROVIDER != "local":
+            if caminho_pdf and os.path.exists(caminho_pdf):
+                os.remove(caminho_pdf)
 
     return pasta_saida, image_paths
 
@@ -389,8 +452,6 @@ def processar_imagem(caminho: str, pdf_basename: str, client: genai.Client, gemi
         }
 
 def analisar_imagens_com_gemini(pdf_basename: str, lista_caminhos: List[str], gemini_model: str, gemini_workers: int, log_cb) -> List[Dict[str, Any]]:
-    import concurrent.futures
-    from functools import partial
     client = genai.Client(api_key=settings.GOOGLE_API_KEY)
     total_imgs = len(lista_caminhos)
     inc_per_page = max(1, 65 // total_imgs) if total_imgs > 0 else 0
@@ -451,26 +512,63 @@ def merge_html(pdf_filename_title: str, report_button: bool, content_list: List[
         
     merged_html += f"\n    </main> \n    {report_button_forms}\n</body>\n</html>"
 
-    output_path = settings.OUTPUT_DIR
-    os.makedirs(output_path, exist_ok=True)
-    nome_sem_extensao = os.path.splitext(pdf_filename_title)[0]
-    full_output_path = os.path.join(output_path, f"{nome_sem_extensao}.html")
-    
-    with open(full_output_path, "w", encoding="utf-8") as f: 
-        f.write(merged_html)
+
+    if settings.STORAGE_PROVIDER == "local":
+        output_path = settings.OUTPUT_DIR
+        os.makedirs(output_path, exist_ok=True)
+        nome_sem_extensao = os.path.splitext(pdf_filename_title)[0]
+        full_output_path = os.path.join(output_path, f"{nome_sem_extensao}.html")
+        with open(full_output_path, "w", encoding="utf-8") as f: 
+            f.write(merged_html)
         
-    logger.info(f"HTML salvo com sucesso em: {full_output_path}")
+        logger.info(f"HTML salvo com sucesso em: {full_output_path}")
+    else:
+        nome_sem_extensao = os.path.splitext(pdf_filename_title)[0]
+        full_output_path = f"outputs/{nome_sem_extensao}.html"
+        html_bytes = merged_html.encode('utf-8')
+        if settings.STORAGE_PROVIDER == "aws":
+            storage_client.put_object(Bucket=settings.AWS_BUCKET_NAME, Key=full_output_path, Body=html_bytes, ContentType='text/html', ContentEncoding='utf-8')
+        elif settings.STORAGE_PROVIDER == "oracle":
+            storage_client.put_object(Bucket=settings.OCI_BUCKET_NAME, Key=full_output_path, Body=html_bytes, ContentType='text/html', ContentEncoding='utf-8')
+    
     return full_output_path
 
 def processar_pdf(caminho_pdf: str, converter_request_schema: ConverterRequest, log_cb):
-    if not os.path.exists(caminho_pdf):
-        raise FileNotFoundError(f"Erro: Arquivo PDF não encontrado em {caminho_pdf}")
+    pdf_basename = os.path.basename(caminho_pdf)
+    caminho_pdf_real = caminho_pdf
 
-    try:
-        with fitz.open(caminho_pdf) as temp_doc:
-            total_paginas = temp_doc.page_count
-    except Exception as e:
-        raise ValueError(f"Erro ao abrir o PDF {caminho_pdf}: {e}")
+    if settings.STORAGE_PROVIDER == "local":
+        if not os.path.exists(caminho_pdf_real):
+            raise FileNotFoundError(f"Erro: Arquivo PDF não encontrado em {caminho_pdf_real}")
+        
+        try:
+            with fitz.open(caminho_pdf_real) as temp_doc:
+                total_paginas = temp_doc.page_count
+        except Exception as e:
+            raise ValueError(f"Erro ao abrir o PDF {caminho_pdf_real}: {e}")
+    elif settings.STORAGE_PROVIDER == "aws":
+        try:
+            waiter = storage_client.get_waiter('object_exists')
+            waiter.wait(Bucket=settings.AWS_BUCKET_NAME, Key=caminho_pdf)
+            with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_pdf_file:
+                storage_client.download_fileobj(settings.AWS_BUCKET_NAME, caminho_pdf, tmp_pdf_file)
+            caminho_pdf_real = tmp_pdf_file.name
+            with fitz.open(caminho_pdf_real) as temp_doc:
+                total_paginas = temp_doc.page_count
+        except Exception as e:
+            raise ValueError(f"Erro ao procurar PDF {caminho_pdf}: {e}")
+    elif settings.STORAGE_PROVIDER == "oracle":
+        try:
+            waiter = storage_client.get_waiter('object_exists')
+            waiter.wait(Bucket=settings.OCI_BUCKET_NAME, Key=caminho_pdf)
+            with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_pdf_file:
+                storage_client.download_fileobj(settings.OCI_BUCKET_NAME, caminho_pdf, tmp_pdf_file)
+            caminho_pdf_real = tmp_pdf_file.name
+            with fitz.open(caminho_pdf_real) as temp_doc:
+                total_paginas = temp_doc.page_count
+        except Exception as e:
+            raise ValueError(f"Erro ao procurar PDF {caminho_pdf}: {e}")
+
     
     log_cb("Iniciando o Parser das Páginas", 5)
     paginas_selecionadas = parse_paginas(converter_request_schema.paginas, total_paginas)
@@ -480,7 +578,7 @@ def processar_pdf(caminho_pdf: str, converter_request_schema: ConverterRequest, 
     log_cb("Fim do Parse das Páginas\n")
 
     log_cb("Convertendo o PDF para imagens...", 10)
-    pasta_saida, image_paths = pdf_para_imagens(caminho_pdf, paginas_selecionadas, converter_request_schema.dpi, log_cb)
+    pasta_saida, image_paths = pdf_para_imagens(caminho_pdf_real, paginas_selecionadas, converter_request_schema.dpi, log_cb)
     
     if not image_paths: 
         if os.path.exists(pasta_saida):
@@ -490,7 +588,6 @@ def processar_pdf(caminho_pdf: str, converter_request_schema: ConverterRequest, 
     log_cb("Fim da conversão\n")
 
     log_cb("Gerando HTML de cada imagem...")
-    pdf_basename = os.path.basename(caminho_pdf)
     respostas = analisar_imagens_com_gemini(pdf_basename, image_paths, converter_request_schema.gemini_model, converter_request_schema.gemini_workers, log_cb)
     log_cb("Os HTML foram gerados\n")
 
