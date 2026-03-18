@@ -133,7 +133,7 @@ def test_download_file_success(client, auth_headers, test_user_id, setup_db, tmp
     # 3. Use patch for settings.OUTPUT_DIR pointing to tmp_path
     with patch('routes.converter_routes.settings.OUTPUT_DIR', str(tmp_path)), patch('routes.converter_routes.settings.STORAGE_PROVIDER', 'local'):
         response = client.get(
-            "/converter/download/dummy_output.html",
+            f"/converter/download/{task.id}",
             headers=auth_headers
         )
     
@@ -156,7 +156,7 @@ def test_download_file_unauthorized_user(client, auth_headers, other_user_auth_h
 
     with patch('routes.converter_routes.settings.OUTPUT_DIR', str(tmp_path)), patch('routes.converter_routes.settings.STORAGE_PROVIDER', 'local'):
         response = client.get(
-            "/converter/download/private_output.html",
+            f"/converter/download/{task.id}",
             headers=auth_headers
         )
     
@@ -164,7 +164,7 @@ def test_download_file_unauthorized_user(client, auth_headers, other_user_auth_h
 
 def test_download_file_not_found_in_db(client, auth_headers):
     response = client.get(
-        "/converter/download/nao_existe.html",
+        "/converter/download/99999",
         headers=auth_headers
     )
     
@@ -183,7 +183,7 @@ def test_download_file_not_found_on_disk(client, auth_headers, test_user_id, set
 
     with patch('routes.converter_routes.settings.OUTPUT_DIR', str(tmp_path)), patch('routes.converter_routes.settings.STORAGE_PROVIDER', 'local'):
         response = client.get(
-            "/converter/download/missing_on_disk.html",
+            f"/converter/download/{task.id}",
             headers=auth_headers
         )
     

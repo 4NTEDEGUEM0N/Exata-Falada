@@ -34,21 +34,27 @@ logger = logging.getLogger(__name__)
 
 converter_router = APIRouter(prefix="/converter", tags=["converter"])
 
-if settings.STORAGE_PROVIDER == "aws":
-    storage_client = boto3.client('s3', region_name=settings.AWS_REGION)
-elif settings.STORAGE_PROVIDER == "oracle":
-    config = Config(
-        request_checksum_calculation="WHEN_REQUIRED",
-        response_checksum_validation="WHEN_REQUIRED"
-    )
-    storage_client = boto3.client(
-        's3',
-        region_name=settings.OCI_REGION,
-        endpoint_url=settings.OCI_ENDPOINT_URL,
-        aws_access_key_id=settings.OCI_ACCESS_KEY_ID,
-        aws_secret_access_key=settings.OCI_SECRET_ACCESS_KEY,
-        config = config
-    )
+def get_storage_client(provider_name: str):
+    if provider_name == "aws":
+        return boto3.client('s3', region_name=settings.AWS_REGION)
+    elif provider_name == "oracle":
+        if settings.STORAGE_PROVIDER != "oracle":
+            settings.OCI_ENDPOINT_URL = f"https://{settings.OCI_NAMESPACE}.compat.objectstorage.{settings.OCI_REGION}.oraclecloud.com"
+        config = Config(
+            request_checksum_calculation="WHEN_REQUIRED",
+            response_checksum_validation="WHEN_REQUIRED"
+        )
+        return boto3.client(
+            's3',
+            region_name=settings.OCI_REGION,
+            endpoint_url=settings.OCI_ENDPOINT_URL,
+            aws_access_key_id=settings.OCI_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.OCI_SECRET_ACCESS_KEY,
+            config=config
+        )
+    return None
+
+storage_client = get_storage_client(settings.STORAGE_PROVIDER)
 
 class TaskStatusEnum(str, Enum):
     CREATED = "Created"
@@ -145,21 +151,21 @@ async def convert_pdf(
         logger.critical(f"ERRO CRÍTICO: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Ocorreu um erro inesperado ao processar o arquivo.")
 
-@converter_router.get("/download/{filename}")
-async def baixar_arquivo(filename: str, db: Session = Depends(get_db), current_user: UserModel = Depends(get_current_user)):
-    filename = os.path.basename(filename)
-    task = db.query(TaskModel).filter(TaskModel.html_filename == filename).first()
-    if not task:
-        raise HTTPException(status_code=404, detail="Arquivo não encontrado ou já expirou.")
+@converter_router.get("/download/{task_id}")
+async def baixar_arquivo(task_id: int, db: Session = Depends(get_db), current_user: UserModel = Depends(get_current_user)):
+    task = db.query(TaskModel).filter(TaskModel.id == task_id).first()
+    if not task or not task.html_filename:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Arquivo não encontrado ou já expirou.")
     
     if task.user_id != current_user.id and not current_user.admin:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="UNAUTHORIZED")
     
+    filename = task.html_filename
     if task.storage_provider == "local":
         file_path = os.path.join(settings.OUTPUT_DIR, filename)
         
         if not os.path.exists(file_path):
-            raise HTTPException(status_code=404, detail="Arquivo não encontrado ou já expirou.")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Arquivo não encontrado ou já expirou.")
             
         return FileResponse(
             path=file_path,
@@ -168,8 +174,9 @@ async def baixar_arquivo(filename: str, db: Session = Depends(get_db), current_u
         )
     elif task.storage_provider == "aws":
         try:
-            storage_client.head_object(Bucket=settings.AWS_BUCKET_NAME, Key=f"outputs/{task.html_filename}")
-            url = storage_client.generate_presigned_url('get_object',
+            client = get_storage_client("aws")
+            client.head_object(Bucket=settings.AWS_BUCKET_NAME, Key=f"outputs/{task.html_filename}")
+            url = client.generate_presigned_url('get_object',
                     Params={'Bucket': settings.AWS_BUCKET_NAME, 'Key': f"outputs/{task.html_filename}",
                             'ResponseContentDisposition': f'attachment; filename="{task.html_filename}"'},
                     ExpiresIn=300
@@ -177,13 +184,17 @@ async def baixar_arquivo(filename: str, db: Session = Depends(get_db), current_u
             return RedirectResponse(url)
         except ClientError as e:
             if e.response['Error']['Code'] == '404':
-                raise HTTPException(status_code=404, detail="Arquivo não encontrado no storage.")
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Arquivo não encontrado no storage.")
             logger.error(f"Erro na AWS: {e}")
-            raise HTTPException(status_code=500, detail="Erro no storage provider.")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Erro no storage provider.")
+        except Exception as e:
+            logger.error(f"Erro ao inicializar cliente AWS ou consultar API: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Erro de configuração no AWS Storage.")
     elif task.storage_provider == "oracle":
         try:
-            storage_client.head_object(Bucket=settings.OCI_BUCKET_NAME, Key=f"outputs/{task.html_filename}")
-            url = storage_client.generate_presigned_url('get_object',
+            client = get_storage_client("oracle")
+            client.head_object(Bucket=settings.OCI_BUCKET_NAME, Key=f"outputs/{task.html_filename}")
+            url = client.generate_presigned_url('get_object',
                     Params={'Bucket': settings.OCI_BUCKET_NAME, 'Key': f"outputs/{task.html_filename}",
                             'ResponseContentDisposition': f'attachment; filename="{task.html_filename}"'},
                     ExpiresIn=300
@@ -191,9 +202,12 @@ async def baixar_arquivo(filename: str, db: Session = Depends(get_db), current_u
             return RedirectResponse(url)
         except ClientError as e:
             if e.response['Error']['Code'] == '404':
-                raise HTTPException(status_code=404, detail="Arquivo não encontrado no storage.")
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Arquivo não encontrado no storage.")
             logger.error(f"Erro no Oracle OCI: {e}")
-            raise HTTPException(status_code=500, detail="Erro no storage provider.")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Erro no storage provider.")
+        except Exception as e:
+            logger.error(f"Erro ao inicializar cliente OCI ou consultar API: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Erro de configuração no Oracle Storage.")
 
 
 def log_to_task(db_session: Session, task_id: int, message: str, increment_progress: int = 0):

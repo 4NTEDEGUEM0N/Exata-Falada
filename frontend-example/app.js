@@ -316,7 +316,7 @@ async function pollStatus() {
                 downloadContainer.classList.remove('hidden');
                 
                 // Setup Download Button
-                downloadBtn.onclick = () => downloadFile(data.html_filename);
+                downloadBtn.onclick = () => downloadFile(currentTaskId);
             } 
             // Handle Error
             else if (data.status === 'Error') {
@@ -351,17 +351,27 @@ function updateProgressUI(percentage, status, statusText) {
     }
 }
 
-async function downloadFile(filename) {
+async function downloadFile(taskId) {
     const token = localStorage.getItem('token');
     
     try {
-        const response = await fetch(`${API_URL}/converter/download/${filename}`, {
+        const response = await fetch(`${API_URL}/converter/download/${taskId}`, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
         });
 
         if (response.ok) {
+            let filename = `arquivo_convertido_${taskId}.html`;
+            const disposition = response.headers.get('content-disposition');
+            if (disposition && disposition.indexOf('filename=') !== -1) {
+                const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+                const matches = filenameRegex.exec(disposition);
+                if (matches != null && matches[1]) { 
+                    filename = matches[1].replace(/['"]/g, '').trim();
+                }
+            }
+
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -582,7 +592,7 @@ function renderTasksTable(tasks, tbodyEl, showUserId) {
         // Check if download is possible
         const isCompleted = (task.status === 'Completed' || task.status === 'Completed with errors') && task.html_filename;
         const downloadBtnHtml = isCompleted ? `
-            <button class="action-btn success-btn btn-icon btn-download" data-filename="${task.html_filename}" title="Baixar">
+            <button class="action-btn success-btn btn-icon btn-download" data-taskid="${task.id}" title="Baixar">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
             </button>
         ` : '';
@@ -613,7 +623,7 @@ function renderTasksTable(tasks, tbodyEl, showUserId) {
         // Add event listeners for buttons in this row
         if (isCompleted) {
             tr.querySelector('.btn-download').addEventListener('click', () => {
-                downloadFile(task.html_filename);
+                downloadFile(task.id);
             });
         }
         
