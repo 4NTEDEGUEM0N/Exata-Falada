@@ -364,62 +364,84 @@ def processar_imagem(caminho: str, pdf_basename: str, client: genai.Client, gemi
         
         MAX_RETRIES = settings.MAX_RETRIES
         response = None
+        html_body = None
+        final_finish_reason = 'UNKNOWN'
+        current_model = gemini_model
         
         for attempt in range(MAX_RETRIES):
             try:
                 response = client.models.generate_content(
-                    model=gemini_model, 
+                    model=current_model, 
                     contents=[prompt, imagem]
                 )
+                
+                html_body = None
+                final_finish_reason = 'UNKNOWN'
+
+                if response and response.candidates:
+                    candidate = response.candidates[0]
+                    final_finish_reason = candidate.finish_reason.name if candidate.finish_reason else 'UNKNOWN'
+
+                    if final_finish_reason == 'MAX_TOKENS':
+                        raise ValueError("MAX_TOKENS")
+
+                    response_text_content = response.text
+                    if not response_text_content and candidate.content and candidate.content.parts:
+                        response_text_content = ''.join(
+                            part.text for part in candidate.content.parts if hasattr(part, 'text') and part.text
+                        )
+
+                    if response_text_content:
+                        match = re.search(r"```html\s*(.*?)\s*```", response_text_content, re.DOTALL | re.IGNORECASE)
+                        if match:
+                            html_body = match.group(1).strip()
+                        else:
+                            trimmed_text = response_text_content.strip()
+                            if trimmed_text.startswith("<") and trimmed_text.endswith(">") and \
+                                re.search(r"<p|<div|<span|<table|<ul|<ol|<h[1-6]", trimmed_text, re.IGNORECASE):
+                                html_body = trimmed_text
+                                
+                        if html_body:
+                            html_body = re.sub(r'<bdi>([a-zA-Z0-9_](?:<sup>.*?</sup>)?)</bdi>', r'\1', html_body)
+                            html_body = re.sub(r'<bdi>(\\[a-zA-Z]+(?:\{.*?\})?(?:\s*\^\{.*?\})?(?:\s*_\{.*?\})?)</bdi>', r'\1', html_body)
+                            html_body = re.sub(r'<bdi>\s*</bdi>', '', html_body)
+
+                if html_body is None:
+                    raise ValueError("HTML não pôde ser extraído da resposta do modelo.")
+                    
+                # Se chegou aqui, extraiu com sucesso
                 break
+                
             except Exception as e:
+                is_max_tokens = "MAX_TOKENS" in str(e).upper()
+                
                 if attempt < MAX_RETRIES - 1:
-                    wait_time = 2 ** attempt * 5
-                    logger.warning(f"Erro na API (tentativa {attempt + 1} de {MAX_RETRIES}) para pág. {current_page_num_in_doc}: {e}. Aguardando {wait_time}s...")
-                    log_cb(f"⚠️ Erro na pág {current_page_num_in_doc} (tentativa {attempt + 1}/{MAX_RETRIES}): aguardando {wait_time}s...")
+                    if is_max_tokens and current_model != settings.MAX_TOKENS_MODEL:
+                        logger.warning(f"Erro MAX_TOKENS na pág {current_page_num_in_doc}. Alternando para o modelo {settings.MAX_TOKENS_MODEL}.")
+                        log_cb(f"⚠️ Erro MAX_TOKENS na pág {current_page_num_in_doc}. Alternando para modelo {settings.MAX_TOKENS_MODEL}...")
+                        current_model = settings.MAX_TOKENS_MODEL
+                        wait_time = 2
+                    else:
+                        wait_time = 2 ** attempt * 5
+                        logger.warning(f"Erro (tentativa {attempt + 1} de {MAX_RETRIES}) para pág. {current_page_num_in_doc}: {e}. Aguardando {wait_time}s...")
+                        log_cb(f"⚠️ Erro na pág {current_page_num_in_doc} (tentativa {attempt + 1}/{MAX_RETRIES}): aguardando {wait_time}s...")
                     time.sleep(wait_time)
                 else:
-                    raise e
+                    if is_max_tokens or "HTML não pôde ser extraído" in str(e):
+                        # Permite sair do loop e continuar com html_body como None para manter a base64_image
+                        break
+                    else:
+                        raise e
 
         imagem.close()
-
-        final_finish_reason = 'UNKNOWN'
-        html_body = None
-        
-        if response and response.candidates:
-            candidate = response.candidates[0]
-            final_finish_reason = candidate.finish_reason.name if candidate.finish_reason else 'UNKNOWN'
-
-            response_text_content = response.text
-            if not response_text_content and candidate.content and candidate.content.parts:
-                response_text_content = ''.join(
-                    part.text for part in candidate.content.parts if hasattr(part, 'text') and part.text
-                )
-
-            if response_text_content:
-                match = re.search(r"```html\s*(.*?)\s*```", response_text_content, re.DOTALL | re.IGNORECASE)
-                if match:
-                    html_body = match.group(1).strip()
-                else:
-                    trimmed_text = response_text_content.strip()
-                    if trimmed_text.startswith("<") and trimmed_text.endswith(">") and \
-                        re.search(r"<p|<div|<span|<table|<ul|<ol|<h[1-6]", trimmed_text, re.IGNORECASE):
-                        html_body = trimmed_text
-                        
-                if html_body:
-                    html_body = re.sub(r'<bdi>([a-zA-Z0-9_](?:<sup>.*?</sup>)?)</bdi>', r'\1', html_body)
-                    html_body = re.sub(r'<bdi>(\\[a-zA-Z]+(?:\{.*?\})?(?:\s*\^\{.*?\})?(?:\s*_\{.*?\})?)</bdi>', r'\1',
-                                        html_body)
-                    html_body = re.sub(r'<bdi>\s*</bdi>', '', html_body)
 
         if html_body is None:
             logger.warning(f"Aviso: Falha ao extrair HTML para {pdf_basename} (pág {current_page_num_in_doc}).")
             log_cb(f"Aviso: Falha ao extrair HTML para {pdf_basename} (pág {current_page_num_in_doc}).")
             if response:
-                logger.warning(f"Texto bruto (300c): {str(response.text)[:300]}...")
                 try:
-                    logger.warning(f"Motivo: {final_finish_reason} ({response.candidates[0].finish_reason.name})")
-                    log_cb(f"Motivo: {final_finish_reason} ({response.candidates[0].finish_reason.name})")
+                    logger.warning(f"Motivo: {final_finish_reason} ({response.candidates[0].finish_reason.name if response.candidates and response.candidates[0].finish_reason else 'None'})")
+                    log_cb(f"Motivo: {final_finish_reason} ({response.candidates[0].finish_reason.name if response.candidates and response.candidates[0].finish_reason else 'None'})")
                 except AttributeError:
                     logger.warning(f"Motivo: {final_finish_reason}")
                     log_cb(f"Motivo: {final_finish_reason}")
@@ -431,7 +453,7 @@ def processar_imagem(caminho: str, pdf_basename: str, client: genai.Client, gemi
             "status": "success" if html_body else "error"
         }
         if html_body is None:
-            resposta["error_msg"] = "HTML não pôde ser extraído da resposta do modelo."
+            resposta["error_msg"] = "Falha ao extrair HTML ou erro de MAX_TOKENS."
 
         if html_body:
             logger.info("✅ Sucesso!")
