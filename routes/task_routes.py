@@ -4,8 +4,10 @@ from models.user_model import UserModel
 from models.task_model import TaskModel
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
+from sqlalchemy import desc
 from database import get_db
 from typing import List, Optional
+from math import ceil
 
 task_router = APIRouter(prefix="/task", tags=["task"])
 
@@ -19,30 +21,42 @@ class TaskResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class PaginatedTaskResponse(BaseModel):
-    total: int
-    skip: int
-    limit: int
+    page: int
+    total_pages: int
     tasks: List[TaskResponse]
 
 
 @task_router.get("/", response_model=PaginatedTaskResponse)
-async def get_all_tasks(skip: int = 0, limit: int = 10, current_user: UserModel = Depends(get_current_user), db: Session = Depends(get_db)):
+async def get_all_tasks(page: int = 1, current_user: UserModel = Depends(get_current_user), db: Session = Depends(get_db)):
     if not current_user.admin:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="UNAUTHORIZED")
     
-    base_query = db.query(TaskModel)
+    limit = 10
+    skip = (page - 1) * limit
+    
+    base_query = db.query(TaskModel).order_by(desc(TaskModel.id))
     total_tasks = base_query.count()
     tasks = base_query.offset(skip).limit(limit).all()
 
-    return {"total": total_tasks, "skip": skip, "limit": limit, "tasks": tasks}
+    total_pages = ceil(total_tasks/limit)
 
-@task_router.get("/me", response_model=PaginatedTaskResponse)
-async def get_all_user_tasks(skip: int = 0, limit: int = 10, current_user: UserModel = Depends(get_current_user), db: Session = Depends(get_db)):
-    base_query = db.query(TaskModel).filter(TaskModel.user_id == current_user.id)
+    return {"page": page, "total_pages": total_pages, "tasks": tasks}
+
+@task_router.get("/user/{user_id}", response_model=PaginatedTaskResponse)
+async def get_all_user_tasks(user_id:int, page: int = 1, current_user: UserModel = Depends(get_current_user), db: Session = Depends(get_db)):
+    if user_id != current_user.id and not current_user.admin:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="UNAUTHORIZED")
+    
+    limit = 10
+    skip = (page - 1) * limit
+    
+    base_query = db.query(TaskModel).filter(TaskModel.user_id == user_id).order_by(desc(TaskModel.id))
     total_tasks = base_query.count()
     tasks = base_query.offset(skip).limit(limit).all()
 
-    return {"total": total_tasks, "skip": skip, "limit": limit, "tasks": tasks}
+    total_pages = ceil(total_tasks/limit)
+
+    return {"page": page, "total_pages": total_pages, "tasks": tasks}
 
 
 @task_router.get("/{task_id}", response_model=TaskResponse)
@@ -52,7 +66,7 @@ async def get_task_id(task_id: int, current_user: UserModel = Depends(get_curren
     if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="NOT FOUND")
     
-    if task.user_id != current_user.id:
+    if task.user_id != current_user.id and not current_user.admin:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="UNAUTHORIZED")
     
     return task
@@ -65,7 +79,7 @@ async def delete_task(task_id: int, current_user: UserModel = Depends(get_curren
     if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="NOT FOUND")
     
-    if task.user_id != current_user.id:
+    if task.user_id != current_user.id and not current_user.admin:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="UNAUTHORIZED")
     
     db.delete(task)

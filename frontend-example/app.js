@@ -7,6 +7,7 @@ if (window.location.hostname === 'exatafalada.duckdns.org') {
 }
 
 let currentTaskId = null;
+let currentUserId = null;
 let pollingInterval = null;
 
 // DOM Elements
@@ -93,6 +94,7 @@ async function fetchUserInfo(token) {
 
         if (response.ok) {
             const data = await response.json();
+            currentUserId = data.id;
             userDisplay.textContent = `Olá, ${data.username}`;
             isAdmin = data.admin === true;
             
@@ -524,20 +526,21 @@ modalOverlay.addEventListener('click', (e) => {
 // Menu Actions
 menuMyTasks.addEventListener('click', () => {
     openModal(modalMyTasks);
-    fetchTasks('/task/me', myTasksTbody);
+    fetchTasks(`/task/user/${currentUserId}`, myTasksTbody, false, 1, 'my-tasks-pagination');
 });
 
 menuAllTasks.addEventListener('click', () => {
     if (isAdmin) {
+        document.getElementById('modal-all-tasks-title').innerHTML = 'Todas as Tarefas do Sistema <span class="admin-badge">Admin</span>';
         openModal(modalAllTasks);
-        fetchTasks('/task/', allTasksTbody, true);
+        fetchTasks('/task/', allTasksTbody, true, 1, 'all-tasks-pagination');
     }
 });
 
 menuAllUsers.addEventListener('click', () => {
     if (isAdmin) {
         openModal(modalAllUsers);
-        fetchUsers('/user/', allUsersTbody);
+        fetchUsers('/user/', allUsersTbody, 1, 'all-users-pagination');
     }
 });
 
@@ -551,18 +554,45 @@ menuCreateUser.addEventListener('click', () => {
 
 // ================= API Handlers for Tasks ================= //
 
-async function fetchTasks(endpoint, tbodyEl, showUserId = false) {
+function renderPaginationControls(data, containerId, fetchCallback) {
+    if (!containerId) return;
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    
+    if (data.total_pages <= 1) {
+        container.innerHTML = '';
+        return;
+    }
+
+    container.innerHTML = `
+        <button class="secondary-btn" id="${containerId}-prev" ${data.page <= 1 ? 'disabled' : ''}>Anterior</button>
+        <span class="pagination-info">Página ${data.page} de ${data.total_pages}</span>
+        <button class="secondary-btn" id="${containerId}-next" ${data.page >= data.total_pages ? 'disabled' : ''}>Próxima</button>
+    `;
+
+    if (data.page > 1) {
+        document.getElementById(`${containerId}-prev`).addEventListener('click', () => fetchCallback(data.page - 1));
+    }
+    if (data.page < data.total_pages) {
+        document.getElementById(`${containerId}-next`).addEventListener('click', () => fetchCallback(data.page + 1));
+    }
+}
+
+async function fetchTasks(endpoint, tbodyEl, showUserId = false, page = 1, paginationContainerId = null) {
     const token = localStorage.getItem('token');
     tbodyEl.innerHTML = '<tr><td colspan="5" style="text-align:center;">Carregando...</td></tr>';
     
+    const baseEndpoint = endpoint.split('?')[0];
+
     try {
-        const response = await fetch(`${API_URL}${endpoint}?limit=50`, {
+        const response = await fetch(`${API_URL}${baseEndpoint}?page=${page}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
 
         if (response.ok) {
             const data = await response.json();
             renderTasksTable(data.tasks, tbodyEl, showUserId);
+            renderPaginationControls(data, paginationContainerId, (newPage) => fetchTasks(baseEndpoint, tbodyEl, showUserId, newPage, paginationContainerId));
         } else {
             tbodyEl.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--danger)">Erro ao carregar tarefas</td></tr>';
         }
@@ -579,8 +609,7 @@ function renderTasksTable(tasks, tbodyEl, showUserId) {
 
     tbodyEl.innerHTML = '';
     
-    // Reverse to show newest first
-    tasks.reverse().forEach(task => {
+    tasks.forEach(task => {
         const tr = document.createElement('tr');
         
         let statusHtml = '';
@@ -688,19 +717,21 @@ async function deleteTask(taskId, rowEl) {
 
 // ================= API Handlers for Users ================= //
 
-async function fetchUsers(endpoint, tbodyEl) {
+async function fetchUsers(endpoint, tbodyEl, page = 1, paginationContainerId = null) {
     const token = localStorage.getItem('token');
     tbodyEl.innerHTML = '<tr><td colspan="4" style="text-align:center;">Carregando...</td></tr>';
     
+    const baseEndpoint = endpoint.split('?')[0];
+
     try {
-        const response = await fetch(`${API_URL}${endpoint}?limit=50`, {
+        const response = await fetch(`${API_URL}${baseEndpoint}?page=${page}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
 
         if (response.ok) {
             const data = await response.json();
-            // The backend mistakenly returns the user list inside `tasks` property
-            renderUsersTable(data.tasks, tbodyEl);
+            renderUsersTable(data.users, tbodyEl);
+            renderPaginationControls(data, paginationContainerId, (newPage) => fetchUsers(baseEndpoint, tbodyEl, newPage, paginationContainerId));
         } else {
             tbodyEl.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--danger)">Erro ao carregar usuários</td></tr>';
         }
@@ -727,6 +758,9 @@ function renderUsersTable(users, tbodyEl) {
             <td>${user.username}</td>
             <td>${adminHtml}</td>
             <td class="actions-cell">
+                <button class="action-btn primary-btn btn-icon btn-user-tasks" data-id="${user.id}" title="Ver Tarefas">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                </button>
                 <button class="action-btn delete-btn btn-icon btn-delete-user" data-id="${user.id}" title="Excluir Usuário">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                 </button>
@@ -734,6 +768,12 @@ function renderUsersTable(users, tbodyEl) {
         `;
         
         tr.innerHTML = columnsHtml;
+
+        tr.querySelector('.btn-user-tasks').addEventListener('click', () => {
+            document.getElementById('modal-all-tasks-title').innerHTML = `Tarefas do Usuário #${user.id} - ${user.username}`;
+            openModal(modalAllTasks);
+            fetchTasks(`/task/user/${user.id}`, allTasksTbody, true, 1, 'all-tasks-pagination');
+        });
 
         tr.querySelector('.btn-delete-user').addEventListener('click', async (e) => {
             const btn = e.currentTarget;

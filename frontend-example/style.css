@@ -725,3 +725,23 @@ input[type="file"] {
 
 .msg-success { color: var(--success); }
 .msg-error { color: var(--danger); }
+
+/* Pagination Controls */
+.pagination-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 0;
+    margin-top: 1rem;
+}
+
+.pagination-container button {
+    width: auto;
+    padding: 0.5rem 1rem;
+}
+
+.pagination-info {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-muted);
+}

@@ -2,10 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from models.user_model import UserModel
 from database import get_db
 from sqlalchemy.orm import Session
+from sqlalchemy import desc
 from security import get_password_hash, verify_password, decode_token, oatuh2_schema, create_access_token, dummy_verify
 from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
 from fastapi.security import OAuth2PasswordRequestForm
+from math import ceil
 
 user_router = APIRouter(prefix="/user", tags=["user"])
 
@@ -29,10 +31,9 @@ class TokenResponse(BaseModel):
     token_type: str
 
 class PaginatedUserResponse(BaseModel):
-    total: int
-    skip: int
-    limit: int
-    tasks: List[UserResponse]
+    page: int
+    total_pages: int
+    users: List[UserResponse]
     
 
 @user_router.post("/token", response_model=TokenResponse)
@@ -79,15 +80,20 @@ async def create_user(user_schema: UserCreate, db: Session = Depends(get_db), cu
         return new_user
 
 @user_router.get("/", response_model=PaginatedUserResponse)
-async def get_all_users(skip: int = 0, limit: int = 10, current_user: UserModel = Depends(get_current_user), db: Session = Depends(get_db)):
+async def get_all_users(page: int = 1, current_user: UserModel = Depends(get_current_user), db: Session = Depends(get_db)):
     if not current_user.admin:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="UNAUTHORIZED")
     
-    base_query = db.query(UserModel)
-    total_tasks = base_query.count()
-    tasks = base_query.offset(skip).limit(limit).all()
+    limit = 10
+    skip = (page - 1) * limit
+    
+    base_query = db.query(UserModel).order_by(desc(UserModel.id))
+    total_users = base_query.count()
+    users = base_query.offset(skip).limit(limit).all()
 
-    return {"total": total_tasks, "skip": skip, "limit": limit, "tasks": tasks}
+    total_pages = ceil(total_users/limit)
+
+    return {"page": page, "total_pages": total_pages, "users": users}
 
 @user_router.get("/me", response_model=UserResponse)
 async def read_user_me(current_user: UserModel = Depends(get_current_user)):
