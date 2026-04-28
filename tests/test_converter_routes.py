@@ -201,3 +201,64 @@ def test_get_models(client, auth_headers):
     assert "default_model" in data
     assert isinstance(data["available_models"], list)
     assert isinstance(data["default_model"], str)
+
+def test_get_status_success(client, auth_headers, test_user_id, setup_db):
+    task = TaskModel(
+        pdf_filename="test_status.pdf",
+        status=TaskStatusEnum.PROCESSING.value,
+        user_id=test_user_id,
+        storage_provider="local"
+    )
+    setup_db.add(task)
+    setup_db.commit()
+    
+    response = client.get(
+        f"/converter/status/{task.id}",
+        headers=auth_headers
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == TaskStatusEnum.PROCESSING.value
+    assert "progress" in data
+
+def test_get_status_unauthorized(client, auth_headers, other_user_auth_headers, setup_db):
+    me_response = client.get("/user/me", headers=other_user_auth_headers)
+    admin_id = me_response.json()["id"]
+
+    task = TaskModel(
+        pdf_filename="test_status_admin.pdf",
+        status=TaskStatusEnum.CREATED.value,
+        user_id=admin_id,
+        storage_provider="local"
+    )
+    setup_db.add(task)
+    setup_db.commit()
+    
+    response = client.get(
+        f"/converter/status/{task.id}",
+        headers=auth_headers
+    )
+    assert response.status_code == 401
+
+def test_get_status_admin_access_other(client, auth_headers, other_user_auth_headers, test_user_id, setup_db):
+    task = TaskModel(
+        pdf_filename="test_status_normal.pdf",
+        status=TaskStatusEnum.CREATED.value,
+        user_id=test_user_id,
+        storage_provider="local"
+    )
+    setup_db.add(task)
+    setup_db.commit()
+    
+    response = client.get(
+        f"/converter/status/{task.id}",
+        headers=other_user_auth_headers
+    )
+    assert response.status_code == 200
+
+def test_get_status_not_found(client, auth_headers):
+    response = client.get(
+        "/converter/status/9999",
+        headers=auth_headers
+    )
+    assert response.status_code == 404
