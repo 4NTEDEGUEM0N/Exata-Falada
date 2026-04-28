@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     DEFAULT_DPI: int = 100
     DEFAULT_GEMINI_WORKERS: int = 4
     DEFAULT_REPORT_BUTTON: bool = False
-    DEFAULT_MODEL: str = "gemini-2.5-flash-lite" # Atualizar com frequência a partir de https://ai.google.dev/gemini-api/docs/models
+    DEFAULT_MODEL: str = "gemini-2.5-flash" # Atualizar com frequência a partir de https://ai.google.dev/gemini-api/docs/models
     MODELS_LIST: list[str] = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.1-pro-preview", "gemini-3-flash-preview", "gemini-3.1-flash-lite-preview"]
     MAX_TOKENS_MODEL: str = "gemini-2.5-flash"
     MAX_RETRIES: int = 3

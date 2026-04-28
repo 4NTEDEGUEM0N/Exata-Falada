@@ -854,5 +854,26 @@ createUserForm.addEventListener('submit', async (e) => {
     }
 });
 
+// Theme Logic
+const themeSelectors = document.querySelectorAll('.theme-selector');
+
+function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+    themeSelectors.forEach(select => select.value = theme);
+}
+
+function initTheme() {
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    applyTheme(savedTheme);
+}
+
+themeSelectors.forEach(select => {
+    select.addEventListener('change', (e) => {
+        applyTheme(e.target.value);
+    });
+});
+
 // Init
+initTheme();
 checkAuth();
