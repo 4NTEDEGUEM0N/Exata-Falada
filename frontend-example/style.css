@@ -754,8 +754,17 @@ input[type="file"] {
 .status-processing { color: var(--badge-proc-text); }
 
 .actions-cell {
-    display: flex;
-    gap: 0.5rem;
+    white-space: nowrap;
+}
+
+.actions-cell > .action-btn {
+    display: inline-flex;
+    margin-right: 0.5rem;
+    vertical-align: middle;
+}
+
+.actions-cell > .action-btn:last-child {
+    margin-right: 0;
 }
 
 .action-btn {

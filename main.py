@@ -47,6 +47,8 @@ from routes.task_routes import task_router
 app.include_router(task_router)
 from routes.patcher_routes import patcher_router
 app.include_router(patcher_router)
+from routes.library_routes import library_router
+app.include_router(library_router)
 
 @app.get("/")
 def health_check():

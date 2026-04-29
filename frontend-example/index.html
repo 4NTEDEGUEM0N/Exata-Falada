@@ -67,6 +67,7 @@
             <div class="tabs">
                 <button class="tab-btn active" data-target="view-converter">Converter PDF</button>
                 <button class="tab-btn" data-target="view-patcher">Corrigir HTML</button>
+                <button class="tab-btn" data-target="view-library">Minha biblioteca</button>
             </div>
 
             <div id="view-converter" class="view-section active">
@@ -181,6 +182,60 @@
                         <button type="submit" id="patch-btn" class="primary-btn">Processar e Baixar</button>
                         <p id="patcher-error" class="error-msg"></p>
                     </form>
+                </section>
+            </div>
+
+            <div id="view-library" class="view-section hidden">
+                <section class="upload-section">
+                    <h2>Minha Biblioteca</h2>
+                    
+                    <div id="library-admin-view" class="admin-only hidden">
+                        <h3>Adicionar Novo Livro (Admin)</h3>
+                        <form id="upload-book-form">
+                            <div class="file-drop-area" id="book-drop-area">
+                                <span class="file-message" id="book-msg">Arraste seu arquivo HTML aqui ou clique para selecionar</span>
+                                <input type="file" id="book-file" accept=".html,.htm" required>
+                            </div>
+                            <button type="submit" id="upload-book-btn" class="primary-btn">Enviar Livro</button>
+                            <p id="upload-book-msg" class="msg-text"></p>
+                        </form>
+                        <hr style="margin: 2rem 0; border: none; border-top: 1px solid var(--border);">
+                        <h3>Todos os Livros do Sistema</h3>
+                        <div class="table-container">
+                            <table class="tasks-table">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Nome do Arquivo</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="all-books-tbody">
+                                    <!-- Books injected via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="all-books-pagination" class="pagination-container"></div>
+                    </div>
+
+                    <div id="library-user-view" class="user-only">
+                        <h3>Meus Livros</h3>
+                        <div class="table-container">
+                            <table class="tasks-table">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Nome do Arquivo</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="my-books-tbody">
+                                    <!-- Books injected via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="my-books-pagination" class="pagination-container"></div>
+                    </div>
                 </section>
             </div>
         </main>
@@ -304,6 +359,72 @@
                     <button type="submit" id="create-user-btn" class="primary-btn" style="margin-top: 1.5rem;">Criar Conta</button>
                     <p id="create-user-msg" class="msg-text"></p>
                 </form>
+            </div>
+        </div>
+
+        <!-- Book Users Modal (Admin) -->
+        <div id="modal-book-users" class="modal-content hidden">
+            <div class="modal-header">
+                <h2>Gerenciar Usuários do Livro <span class="admin-badge">Admin</span></h2>
+                <button class="close-modal-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="add-user-to-book-form" style="margin-bottom: 1rem; display: flex; gap: 0.5rem; align-items: flex-end;">
+                    <div class="input-group" style="flex: 1; margin-bottom: 0;">
+                        <label for="book-user-id">ID do Usuário</label>
+                        <input type="number" id="book-user-id" required>
+                    </div>
+                    <input type="hidden" id="current-book-id">
+                    <button type="submit" class="primary-btn" style="white-space: nowrap;">Adicionar Usuário</button>
+                </form>
+                <div class="table-container">
+                    <table class="tasks-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Usuário</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="book-users-tbody">
+                            <!-- Users injected via JS -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="book-users-pagination" class="pagination-container"></div>
+            </div>
+        </div>
+
+        <!-- User Books Modal (Admin) -->
+        <div id="modal-user-books" class="modal-content hidden">
+            <div class="modal-header">
+                <h2>Gerenciar Livros do Usuário <span class="admin-badge">Admin</span></h2>
+                <button class="close-modal-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="add-book-to-user-form" style="margin-bottom: 1rem; display: flex; gap: 0.5rem; align-items: flex-end;">
+                    <div class="input-group" style="flex: 1; margin-bottom: 0;">
+                        <label for="user-book-id">ID do Livro</label>
+                        <input type="number" id="user-book-id" required>
+                    </div>
+                    <input type="hidden" id="current-user-books-id">
+                    <button type="submit" class="primary-btn" style="white-space: nowrap;">Adicionar Livro</button>
+                </form>
+                <div class="table-container">
+                    <table class="tasks-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nome do Arquivo</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="user-books-tbody">
+                            <!-- Books injected via JS -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="user-books-pagination" class="pagination-container"></div>
             </div>
         </div>
     </div>

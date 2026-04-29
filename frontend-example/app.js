@@ -102,6 +102,8 @@ async function fetchUserInfo(token) {
             if (isAdmin) {
                 document.getElementById('admin-settings').classList.remove('hidden');
                 document.querySelectorAll('.admin-only').forEach(el => el.classList.remove('hidden'));
+                document.getElementById('library-admin-view').classList.remove('hidden');
+                document.getElementById('library-user-view').classList.add('hidden');
                 userDisplay.innerHTML += ' <span style="color:var(--primary); font-size: 0.8em; font-weight: bold;">[ADMIN]</span>';
                 
                 // Fetch models since the user is an admin
@@ -109,6 +111,8 @@ async function fetchUserInfo(token) {
             } else {
                 document.getElementById('admin-settings').classList.add('hidden');
                 document.querySelectorAll('.admin-only').forEach(el => el.classList.add('hidden'));
+                document.getElementById('library-admin-view').classList.add('hidden');
+                document.getElementById('library-user-view').classList.remove('hidden');
             }
             
             showApp();
@@ -408,6 +412,14 @@ tabBtns.forEach(btn => {
         // Show target section
         const targetId = btn.getAttribute('data-target');
         document.getElementById(targetId).classList.replace('hidden', 'active');
+
+        if (targetId === 'view-library') {
+            if (isAdmin) {
+                fetchBooks('/library/', document.getElementById('all-books-tbody'), true, 1, 'all-books-pagination');
+            } else {
+                fetchBooks(`/library/books/${currentUserId}`, document.getElementById('my-books-tbody'), false, 1, 'my-books-pagination');
+            }
+        }
     });
 });
 
@@ -758,6 +770,9 @@ function renderUsersTable(users, tbodyEl) {
             <td>${user.username}</td>
             <td>${adminHtml}</td>
             <td class="actions-cell">
+                <button class="action-btn success-btn btn-icon btn-user-books" data-id="${user.id}" title="Listar Livros">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+                </button>
                 <button class="action-btn primary-btn btn-icon btn-user-tasks" data-id="${user.id}" title="Ver Tarefas">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
                 </button>
@@ -768,6 +783,12 @@ function renderUsersTable(users, tbodyEl) {
         `;
         
         tr.innerHTML = columnsHtml;
+
+        tr.querySelector('.btn-user-books').addEventListener('click', () => {
+            document.getElementById('current-user-books-id').value = user.id;
+            openModal(document.getElementById('modal-user-books'));
+            fetchUserBooks(user.id, 1);
+        });
 
         tr.querySelector('.btn-user-tasks').addEventListener('click', () => {
             document.getElementById('modal-all-tasks-title').innerHTML = `Tarefas do Usuário #${user.id} - ${user.username}`;
@@ -853,6 +874,299 @@ createUserForm.addEventListener('submit', async (e) => {
         createUserMsg.classList.add('msg-error');
     }
 });
+
+// ================= Library Handlers ================= //
+
+async function fetchBooks(endpoint, tbodyEl, isAdminView, page = 1, paginationContainerId = null) {
+    const token = localStorage.getItem('token');
+    tbodyEl.innerHTML = '<tr><td colspan="3" style="text-align:center;">Carregando...</td></tr>';
+    
+    try {
+        const response = await fetch(`${API_URL}${endpoint.split('?')[0]}?page=${page}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            renderBooksTable(data.books, tbodyEl, isAdminView);
+            renderPaginationControls(data, paginationContainerId, (newPage) => fetchBooks(endpoint, tbodyEl, isAdminView, newPage, paginationContainerId));
+        } else {
+            tbodyEl.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--danger)">Erro ao carregar livros</td></tr>';
+        }
+    } catch (error) {
+        tbodyEl.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--danger)">Erro de conexão</td></tr>';
+    }
+}
+
+function renderBooksTable(books, tbodyEl, isAdminView) {
+    if (!books || books.length === 0) {
+        tbodyEl.innerHTML = '<tr><td colspan="3" style="text-align:center;">Nenhum livro encontrado.</td></tr>';
+        return;
+    }
+    tbodyEl.innerHTML = '';
+    books.forEach(book => {
+        const tr = document.createElement('tr');
+        let actionsHtml = `
+            <button class="action-btn success-btn btn-icon btn-open-book" data-id="${book.id}" title="Abrir Livro">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+            </button>
+        `;
+        if (isAdminView) {
+            actionsHtml += `
+                <button class="action-btn primary-btn btn-icon btn-book-users" data-id="${book.id}" title="Gerenciar Usuários">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                </button>
+                <button class="action-btn delete-btn btn-icon btn-delete-book" data-id="${book.id}" title="Excluir Livro">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                </button>
+            `;
+        }
+        
+        tr.innerHTML = `
+            <td>#${book.id}</td>
+            <td>${book.filename}</td>
+            <td class="actions-cell">${actionsHtml}</td>
+        `;
+        
+        if (isAdminView) {
+            tr.querySelector('.btn-book-users').addEventListener('click', () => {
+                document.getElementById('current-book-id').value = book.id;
+                openModal(document.getElementById('modal-book-users'));
+                fetchBookUsers(book.id, 1);
+            });
+            tr.querySelector('.btn-delete-book').addEventListener('click', async () => {
+                if(confirm('Tem certeza que deseja excluir este livro?')) {
+                    const token = localStorage.getItem('token');
+                    await fetch(`${API_URL}/library/delete/${book.id}`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
+                    fetchBooks('/library/', document.getElementById('all-books-tbody'), true, 1, 'all-books-pagination');
+                }
+            });
+        }
+        
+        tr.querySelector('.btn-open-book').addEventListener('click', async () => {
+            const token = localStorage.getItem('token');
+            const btn = tr.querySelector('.btn-open-book');
+            btn.disabled = true;
+            try {
+                const response = await fetch(`${API_URL}/library/${book.id}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    window.open(url, '_blank');
+                } else {
+                    alert('Não foi possível abrir o arquivo.');
+                }
+            } catch (err) {
+                alert('Erro de rede ao tentar abrir o arquivo.');
+            } finally {
+                btn.disabled = false;
+            }
+        });
+
+        tbodyEl.appendChild(tr);
+    });
+}
+
+// Upload Book Logic
+const uploadBookForm = document.getElementById('upload-book-form');
+const bookFileInput = document.getElementById('book-file');
+const bookMsg = document.getElementById('book-msg');
+
+if (bookFileInput) {
+    bookFileInput.addEventListener('change', (e) => {
+        bookMsg.textContent = e.target.files[0]?.name || 'Arraste seu arquivo HTML aqui ou clique para selecionar';
+    });
+}
+
+if (uploadBookForm) {
+    uploadBookForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const file = bookFileInput.files[0];
+        const token = localStorage.getItem('token');
+        if (!file || !token) return;
+        
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const btn = document.getElementById('upload-book-btn');
+        const msg = document.getElementById('upload-book-msg');
+        btn.disabled = true;
+        btn.textContent = 'Enviando...';
+        
+        try {
+            const response = await fetch(`${API_URL}/library/`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: formData
+            });
+            if (response.ok) {
+                msg.textContent = 'Livro enviado com sucesso!';
+                msg.className = 'msg-text msg-success';
+                uploadBookForm.reset();
+                bookMsg.textContent = 'Arraste seu arquivo HTML aqui ou clique para selecionar';
+                fetchBooks('/library/', document.getElementById('all-books-tbody'), true, 1, 'all-books-pagination');
+            } else {
+                const err = await response.json();
+                msg.textContent = err.detail || 'Erro ao enviar livro.';
+                msg.className = 'msg-text msg-error';
+            }
+        } catch (err) {
+            msg.textContent = 'Erro de rede.';
+            msg.className = 'msg-text msg-error';
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Enviar Livro';
+        }
+    });
+}
+
+// Book Users Logic
+async function fetchBookUsers(bookId, page = 1) {
+    const token = localStorage.getItem('token');
+    const tbodyEl = document.getElementById('book-users-tbody');
+    tbodyEl.innerHTML = '<tr><td colspan="3" style="text-align:center;">Carregando...</td></tr>';
+    
+    try {
+        const response = await fetch(`${API_URL}/library/users/${bookId}?page=${page}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+            const data = await response.json();
+            renderBookUsersTable(data.users, tbodyEl, bookId);
+            renderPaginationControls(data, 'book-users-pagination', (newPage) => fetchBookUsers(bookId, newPage));
+        } else {
+            tbodyEl.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--danger)">Erro</td></tr>';
+        }
+    } catch (error) {
+        tbodyEl.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--danger)">Erro</td></tr>';
+    }
+}
+
+function renderBookUsersTable(users, tbodyEl, bookId) {
+    if (!users || users.length === 0) {
+        tbodyEl.innerHTML = '<tr><td colspan="3" style="text-align:center;">Nenhum usuário com acesso a este livro.</td></tr>';
+        return;
+    }
+    tbodyEl.innerHTML = '';
+    users.forEach(user => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>#${user.id}</td>
+            <td>${user.username}</td>
+            <td class="actions-cell">
+                <button class="action-btn delete-btn btn-icon btn-remove-user-book" data-userid="${user.id}" title="Remover Acesso">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="18" y1="8" x2="23" y2="13"></line><line x1="23" y1="8" x2="18" y2="13"></line></svg>
+                </button>
+            </td>
+        `;
+        tr.querySelector('.btn-remove-user-book').addEventListener('click', async () => {
+            const token = localStorage.getItem('token');
+            await fetch(`${API_URL}/library/remove/${user.id}/${bookId}`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
+            fetchBookUsers(bookId, 1);
+        });
+        tbodyEl.appendChild(tr);
+    });
+}
+
+const addUserToBookForm = document.getElementById('add-user-to-book-form');
+if (addUserToBookForm) {
+    addUserToBookForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const bookId = document.getElementById('current-book-id').value;
+        const userId = document.getElementById('book-user-id').value;
+        const token = localStorage.getItem('token');
+        
+        try {
+            const response = await fetch(`${API_URL}/library/add/${userId}/${bookId}`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                document.getElementById('book-user-id').value = '';
+                fetchBookUsers(bookId, 1);
+            } else {
+                alert('Falha ao adicionar usuário. Verifique se o ID está correto ou se já possui acesso.');
+            }
+        } catch(err) {
+            alert('Erro de rede.');
+        }
+    });
+}
+
+// User Books Logic
+async function fetchUserBooks(userId, page = 1) {
+    const token = localStorage.getItem('token');
+    const tbodyEl = document.getElementById('user-books-tbody');
+    tbodyEl.innerHTML = '<tr><td colspan="3" style="text-align:center;">Carregando...</td></tr>';
+    
+    try {
+        const response = await fetch(`${API_URL}/library/books/${userId}?page=${page}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+            const data = await response.json();
+            renderUserBooksTable(data.books, tbodyEl, userId);
+            renderPaginationControls(data, 'user-books-pagination', (newPage) => fetchUserBooks(userId, newPage));
+        } else {
+            tbodyEl.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--danger)">Erro</td></tr>';
+        }
+    } catch (error) {
+        tbodyEl.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--danger)">Erro</td></tr>';
+    }
+}
+
+function renderUserBooksTable(books, tbodyEl, userId) {
+    if (!books || books.length === 0) {
+        tbodyEl.innerHTML = '<tr><td colspan="3" style="text-align:center;">Nenhum livro para este usuário.</td></tr>';
+        return;
+    }
+    tbodyEl.innerHTML = '';
+    books.forEach(book => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>#${book.id}</td>
+            <td>${book.filename}</td>
+            <td class="actions-cell">
+                <button class="action-btn delete-btn btn-icon btn-remove-book-user" data-bookid="${book.id}" title="Remover Acesso">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="18" y1="8" x2="23" y2="13"></line><line x1="23" y1="8" x2="18" y2="13"></line></svg>
+                </button>
+            </td>
+        `;
+        tr.querySelector('.btn-remove-book-user').addEventListener('click', async () => {
+            const token = localStorage.getItem('token');
+            await fetch(`${API_URL}/library/remove/${userId}/${book.id}`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
+            fetchUserBooks(userId, 1);
+        });
+        tbodyEl.appendChild(tr);
+    });
+}
+
+const addBookToUserForm = document.getElementById('add-book-to-user-form');
+if (addBookToUserForm) {
+    addBookToUserForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const userId = document.getElementById('current-user-books-id').value;
+        const bookId = document.getElementById('user-book-id').value;
+        const token = localStorage.getItem('token');
+        
+        try {
+            const response = await fetch(`${API_URL}/library/add/${userId}/${bookId}`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                document.getElementById('user-book-id').value = '';
+                fetchUserBooks(userId, 1);
+            } else {
+                alert('Falha ao adicionar livro. Verifique se o ID está correto ou se já possui acesso.');
+            }
+        } catch(err) {
+            alert('Erro de rede.');
+        }
+    });
+}
 
 // Theme Logic
 const themeSelectors = document.querySelectorAll('.theme-selector');

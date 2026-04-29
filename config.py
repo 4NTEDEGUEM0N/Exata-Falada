@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     ADMIN_USER: str
     ADMIN_PASSWORD: str
+    LIBRARY_DIR: str = "files/library"
 
     STORAGE_PROVIDER: Literal["aws", "oracle", "local"] = "local"
     
@@ -66,3 +67,6 @@ if not os.path.exists(settings.OUTPUT_DIR):
 
 if not os.path.exists(settings.UPLOAD_DIR):
     os.makedirs(settings.UPLOAD_DIR)
+
+if not os.path.exists(settings.LIBRARY_DIR):
+    os.makedirs(settings.LIBRARY_DIR)
