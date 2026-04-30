@@ -55,6 +55,7 @@ jobs:
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         # Script que será executado dentro do seu servidor
         script: |
+          export PATH=$PATH:/usr/bin:/usr/local/bin
           cd /var/www/Exata-Falada
           git pull origin main
           
@@ -63,5 +64,7 @@ jobs:
           pip install -r requirements.txt
           
           # Reiniciar os serviços da aplicação web
-          sudo pm2 restart exata-falada
-          sudo systemctl restart nginx
+          sudo kill -9 $(sudo lsof -t -i:8000)
+          sudo pm2 restart ecosystem.config.js --update-env
+          sleep 5
+          sudo systemctl reload  nginx
