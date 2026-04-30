@@ -213,7 +213,7 @@ async def baixar_arquivo(task_id: int, db: Session = Depends(get_db), current_us
 def log_to_task(db_session: Session, task_id: int, message: str, increment_progress: int = 0):
     task = db_session.query(TaskModel).filter_by(id=task_id).first()
     if task:
-        timestamp = time.strftime("[%H:%M:%S]")
+        timestamp = time.strftime("[%d/%m/%Y %H:%M:%S]")
         new_log = f"{timestamp} {message}\n"
         task.logs = (task.logs or "") + new_log
         if increment_progress > 0:

@@ -10,6 +10,15 @@ let currentTaskId = null;
 let currentUserId = null;
 let pollingInterval = null;
 
+function formatDate(isoString) {
+    if (!isoString) return '-';
+    const date = new Date(isoString);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+}
+
 // DOM Elements
 const loginContainer = document.getElementById('login-container');
 const appContainer = document.getElementById('app-container');
@@ -648,7 +657,8 @@ function renderTasksTable(tasks, tbodyEl, showUserId) {
         if (showUserId) columnsHtml += `<td>${task.user_id}</td>`;
         
         columnsHtml += `
-            <td>${task.pdf_filename}</td>
+            <td class="col-name" title="${task.pdf_filename}">${task.pdf_filename}</td>
+            <td class="col-date">${formatDate(task.created_at)}</td>
             <td>${statusHtml}</td>
             <td class="actions-cell">
                 ${infoBtnHtml}
@@ -924,7 +934,8 @@ function renderBooksTable(books, tbodyEl, isAdminView) {
         
         tr.innerHTML = `
             <td>#${book.id}</td>
-            <td>${book.filename}</td>
+            <td class="col-name" title="${book.filename}">${book.filename}</td>
+            <td class="col-date">${formatDate(book.created_at)}</td>
             <td class="actions-cell">${actionsHtml}</td>
         `;
         
@@ -1127,7 +1138,8 @@ function renderUserBooksTable(books, tbodyEl, userId) {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>#${book.id}</td>
-            <td>${book.filename}</td>
+            <td class="col-name" title="${book.filename}">${book.filename}</td>
+            <td class="col-date">${formatDate(book.created_at)}</td>
             <td class="actions-cell">
                 <button class="action-btn delete-btn btn-icon btn-remove-book-user" data-bookid="${book.id}" title="Remover Acesso">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="18" y1="8" x2="23" y2="13"></line><line x1="23" y1="8" x2="18" y2="13"></line></svg>

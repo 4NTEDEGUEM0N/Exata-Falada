@@ -8,6 +8,7 @@ from sqlalchemy import desc
 from database import get_db
 from typing import List, Optional
 from math import ceil
+from datetime import datetime
 
 task_router = APIRouter(prefix="/task", tags=["task"])
 
@@ -17,6 +18,7 @@ class TaskResponse(BaseModel):
     html_filename: Optional[str]
     status: str
     user_id: int
+    created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 

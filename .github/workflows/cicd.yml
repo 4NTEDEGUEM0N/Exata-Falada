@@ -64,7 +64,8 @@ jobs:
           pip install -r requirements.txt
           
           # Reiniciar os serviços da aplicação web
-          sudo kill -9 $(sudo lsof -t -i:8000)
+          sudo pm2 stop exata-falada || true
+          sudo fuser -k 8000/tcp || true
           sudo pm2 restart ecosystem.config.js --update-env
           sleep 5
           sudo systemctl reload  nginx

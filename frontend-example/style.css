@@ -867,3 +867,15 @@ input[type="file"] {
     background-color: var(--surface);
     color: var(--text-main);
 }
+
+/* Specific column styles */
+.col-name {
+    max-width: 120px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.col-date {
+    width: 90px;
+    white-space: nowrap;
+}

@@ -14,6 +14,7 @@ import re
 from config import settings
 import os
 import shutil
+from datetime import datetime
 
 library_router = APIRouter(prefix="/library", tags=["library"])
 
@@ -21,6 +22,7 @@ class BookResponse(BaseModel):
     id: int
     filename: str
     file_path: str
+    created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
