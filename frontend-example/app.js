@@ -1,9 +1,9 @@
 let API_URL = '';
 
-if (window.location.hostname === 'exatafalada.duckdns.org') {
-    API_URL = '/api'; 
-} else {
+if (window.location.hostname === '127.0.0.1') {
     API_URL = 'http://127.0.0.1:8000'; 
+} else {
+    API_URL = '/api-v2'; 
 }
 
 let currentTaskId = null;
