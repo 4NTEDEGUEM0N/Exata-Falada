@@ -6,6 +6,7 @@ from alembic import command
 import os
 from config import settings
 import logging
+import sys
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,32 @@ def upgrade_db():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     ini_path = os.path.join(base_dir, "alembic.ini")
     
+    if sys.platform != "win32":
+        import fcntl
+        lock_file = os.path.join(base_dir, "alembic_upgrade.lock")
+        fd = open(lock_file, "w")
+        try:
+            # Tenta adquirir um lock exclusivo sem bloquear (non-blocking)
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except (BlockingIOError, OSError):
+            logger.info("Database is being upgraded by another worker. Waiting...")
+            # Bloqueia esperando o outro worker terminar e liberar o lock
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            fd.close()
+            return
+            
+        try:
+            _run_upgrade(ini_path)
+        finally:
+            # Libera o lock após terminar a migração
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            fd.close()
+    else:
+        # No Windows (desenvolvimento), geralmente usamos uvicorn com reload (1 worker)
+        _run_upgrade(ini_path)
+
+def _run_upgrade(ini_path):
     alembic_cfg = Config(ini_path)
     alembic_cfg.set_main_option('sqlalchemy.url', DATABASE_URL)
     alembic_cfg.attributes["configure_logger"] = False
