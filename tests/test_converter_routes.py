@@ -1,8 +1,9 @@
 import pytest
-from unittest.mock import patch, mock_open
+from unittest.mock import patch, mock_open, MagicMock
 import os
 from models.task_model import TaskModel
-from routes.converter_routes import TaskStatusEnum
+from routes.converter_routes import TaskStatusEnum, processar_imagem
+from config import settings
 
 @pytest.fixture
 def auth_headers(client):
@@ -262,3 +263,97 @@ def test_get_status_not_found(client, auth_headers):
         headers=auth_headers
     )
     assert response.status_code == 404
+
+
+@patch('routes.converter_routes.os.path.exists')
+@patch('routes.converter_routes.Image.open')
+@patch('builtins.open', new_callable=mock_open, read_data=b"fake_image_bytes")
+def test_processar_imagem_recitation_model_switch(mock_file, mock_image_open, mock_exists):
+    mock_exists.return_value = True
+    
+    # Mock PIL Image
+    mock_img = MagicMock()
+    mock_img.size = (100, 100)
+    mock_image_open.return_value = mock_img
+    
+    # Mock genai.Client
+    mock_client = MagicMock()
+    
+    # We want to simulate a RECITATION error on attempt 1, and success on attempt 2.
+    mock_response_recitation = MagicMock()
+    mock_candidate_recitation = MagicMock()
+    mock_candidate_recitation.finish_reason.name = 'RECITATION'
+    mock_response_recitation.candidates = [mock_candidate_recitation]
+    
+    mock_response_success = MagicMock()
+    mock_candidate_success = MagicMock()
+    mock_candidate_success.finish_reason.name = 'STOP'
+    mock_response_success.candidates = [mock_candidate_success]
+    mock_response_success.text = "```html\n<p>Hello World</p>\n```"
+    
+    mock_client.models.generate_content.side_effect = [
+        mock_response_recitation,
+        mock_response_success
+    ]
+    
+    log_messages = []
+    def log_cb(msg, inc=0):
+        log_messages.append(msg)
+        
+    result = processar_imagem(
+        caminho="pagina_1.png",
+        pdf_basename="test.pdf",
+        client=mock_client,
+        gemini_model="gemini-2.0-flash",
+        inc_per_page=5,
+        log_cb=log_cb
+    )
+    
+    assert result["status"] == "success"
+    assert result["body"] == "<p>Hello World</p>"
+    
+    calls = mock_client.models.generate_content.call_args_list
+    assert len(calls) == 2
+    assert calls[0][1]["model"] == "gemini-2.0-flash"
+    assert calls[1][1]["model"] == settings.RETRY_MODEL
+    
+    assert any("Erro RECITATION" in msg for msg in log_messages)
+    assert any("RECITATION" in msg for msg in log_messages)
+    assert any("✅ Sucesso na pág 1!" in msg for msg in log_messages)
+
+
+@patch('routes.converter_routes.os.path.exists')
+@patch('routes.converter_routes.Image.open')
+@patch('builtins.open', new_callable=mock_open, read_data=b"fake_image_bytes")
+def test_processar_imagem_logs_errors_in_all_attempts(mock_file, mock_image_open, mock_exists):
+    mock_exists.return_value = True
+    
+    mock_img = MagicMock()
+    mock_img.size = (100, 100)
+    mock_image_open.return_value = mock_img
+    
+    mock_client = MagicMock()
+    
+    mock_client.models.generate_content.side_effect = [
+        Exception("Api Error 1"),
+        Exception("Api Error 2"),
+        Exception("Api Error 3")
+    ]
+    
+    log_messages = []
+    def log_cb(msg, inc=0):
+        log_messages.append(msg)
+        
+    result = processar_imagem(
+        caminho="pagina_1.png",
+        pdf_basename="test.pdf",
+        client=mock_client,
+        gemini_model="gemini-2.0-flash",
+        inc_per_page=5,
+        log_cb=log_cb
+    )
+    
+    assert result["status"] == "error"
+    assert any("Api Error 1" in msg for msg in log_messages)
+    assert any("Api Error 2" in msg for msg in log_messages)
+    assert any("Api Error 3" in msg for msg in log_messages)

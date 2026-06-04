@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     DEFAULT_REPORT_BUTTON: bool = False
     DEFAULT_MODEL: str = "gemini-2.5-flash-lite" # Atualizar com frequência a partir de https://ai.google.dev/gemini-api/docs/models
     MODELS_LIST: list[str] = ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.5-pro", "gemini-3.1-flash-lite", "gemini-3-flash-preview", "gemini-3.1-pro-preview", "gemini-3.5-flash"]
-    MAX_TOKENS_MODEL: str = "gemini-2.5-flash"
+    RETRY_MODEL: str = "gemini-3.1-flash-lite"
     MAX_RETRIES: int = 3
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")

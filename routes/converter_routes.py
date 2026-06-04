@@ -384,6 +384,8 @@ def processar_imagem(caminho: str, pdf_basename: str, client: genai.Client, gemi
 
                     if final_finish_reason == 'MAX_TOKENS':
                         raise ValueError("MAX_TOKENS")
+                    if final_finish_reason == 'RECITATION':
+                        raise ValueError("RECITATION")
 
                     response_text_content = response.text
                     if not response_text_content and candidate.content and candidate.content.parts:
@@ -414,23 +416,30 @@ def processar_imagem(caminho: str, pdf_basename: str, client: genai.Client, gemi
                 
             except Exception as e:
                 is_max_tokens = "MAX_TOKENS" in str(e).upper()
+                is_recitation = "RECITATION" in str(e).upper()
+                should_switch_model = is_max_tokens or is_recitation
                 
                 if attempt < MAX_RETRIES - 1:
-                    if is_max_tokens and current_model != settings.MAX_TOKENS_MODEL:
-                        logger.warning(f"Erro MAX_TOKENS na pág {current_page_num_in_doc}. Alternando para o modelo {settings.MAX_TOKENS_MODEL}.")
-                        log_cb(f"⚠️ Erro MAX_TOKENS na pág {current_page_num_in_doc}. Alternando para modelo {settings.MAX_TOKENS_MODEL}...")
-                        current_model = settings.MAX_TOKENS_MODEL
+                    if should_switch_model and current_model != settings.RETRY_MODEL:
+                        error_type = "MAX_TOKENS" if is_max_tokens else "RECITATION"
+                        logger.warning(f"Erro {error_type} na pág {current_page_num_in_doc}. Alternando para o modelo {settings.RETRY_MODEL}.")
+                        log_cb(f"⚠️ Erro {error_type} na pág {current_page_num_in_doc} (tentativa {attempt + 1}/{MAX_RETRIES}): {e}. Alternando para modelo {settings.RETRY_MODEL}...")
+                        current_model = settings.RETRY_MODEL
                         wait_time = 2
                     else:
                         wait_time = 2 ** attempt * 5
                         logger.warning(f"Erro (tentativa {attempt + 1} de {MAX_RETRIES}) para pág. {current_page_num_in_doc}: {e}. Aguardando {wait_time}s...")
-                        log_cb(f"⚠️ Erro na pág {current_page_num_in_doc} (tentativa {attempt + 1}/{MAX_RETRIES}): aguardando {wait_time}s...")
+                        log_cb(f"⚠️ Erro na pág {current_page_num_in_doc} (tentativa {attempt + 1}/{MAX_RETRIES}): {e}. Aguardando {wait_time}s...")
                     time.sleep(wait_time)
                 else:
-                    if is_max_tokens or "HTML não pôde ser extraído" in str(e):
+                    if should_switch_model or "HTML não pôde ser extraído" in str(e):
+                        logger.warning(f"Erro final (tentativa {attempt + 1} de {MAX_RETRIES}) na pág {current_page_num_in_doc}: {e}.")
+                        log_cb(f"⚠️ Erro final na pág {current_page_num_in_doc} (tentativa {attempt + 1}/{MAX_RETRIES}): {e}.")
                         # Permite sair do loop e continuar com html_body como None para manter a base64_image
                         break
                     else:
+                        logger.error(f"Erro fatal na pág {current_page_num_in_doc} (tentativa {attempt + 1}/{MAX_RETRIES}): {e}.")
+                        log_cb(f"❌ Erro fatal na pág {current_page_num_in_doc} (tentativa {attempt + 1}/{MAX_RETRIES}): {e}.")
                         raise e
 
         imagem.close()
