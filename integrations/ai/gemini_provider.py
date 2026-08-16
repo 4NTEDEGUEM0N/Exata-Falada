@@ -18,9 +18,47 @@ logger = logging.getLogger(__name__)
 class GeminiProvider(AIProvider):
     """Implementação do provedor de IA utilizando o Google Gemini SDK."""
 
+    # Atualizar com frequência a partir de https://ai.google.dev/gemini-api/docs/models
+    AVAILABLE_MODELS = [
+        "gemini-2.5-flash-lite", 
+        "gemini-2.5-flash", 
+        "gemini-2.5-pro", 
+        "gemini-3.1-flash-lite", 
+        "gemini-3-flash-preview", 
+        "gemini-3.1-pro-preview", 
+        "gemini-3.5-flash"
+    ]
+    DEFAULT_MODEL = "gemini-2.5-flash-lite"
+    RETRY_MODEL = "gemini-3.1-flash-lite"
+    MAX_RETRIES = 3
+
     def __init__(self, api_key: str | None = settings.GOOGLE_API_KEY):
         self.api_key = api_key
         self.client = genai.Client(api_key=self.api_key)
+
+    @property
+    def available_models(self) -> List[str]:
+        return list(self.AVAILABLE_MODELS)
+
+    @property
+    def default_model(self) -> str:
+        return self.DEFAULT_MODEL
+
+    @property
+    def retry_model(self) -> str:
+        return self.RETRY_MODEL
+
+    @property
+    def max_retries(self) -> int:
+        return self.MAX_RETRIES
+
+    def get_available_models(self) -> List[str]:
+        """Método utilitário para retrocompatibilidade."""
+        return self.available_models
+
+    def get_default_model(self) -> str:
+        """Método utilitário para retrocompatibilidade."""
+        return self.default_model
 
     @staticmethod
     def limpar_resposta_html(response_text: str) -> Optional[str]:
@@ -57,7 +95,7 @@ class GeminiProvider(AIProvider):
             base64_image_data = base64.b64encode(image_data).decode('utf-8')
             prompt = get_prompt(pdf_basename, imagem.size, current_page_num_in_doc)
 
-            MAX_RETRIES = settings.MAX_RETRIES
+            MAX_RETRIES = self.max_retries
             response = None
             html_body = None
             final_finish_reason = 'UNKNOWN'
@@ -102,11 +140,11 @@ class GeminiProvider(AIProvider):
                     should_switch_model = is_max_tokens or is_recitation
 
                     if attempt < MAX_RETRIES - 1:
-                        if should_switch_model and current_model != settings.RETRY_MODEL:
+                        if should_switch_model and current_model != self.retry_model:
                             error_type = "MAX_TOKENS" if is_max_tokens else "RECITATION"
-                            logger.warning(f"Erro {error_type} na pág {current_page_num_in_doc}. Alternando para o modelo {settings.RETRY_MODEL}.")
-                            log_cb(f"⚠️ Erro {error_type} na pág {current_page_num_in_doc} (tentativa {attempt + 1}/{MAX_RETRIES}): {e}. Alternando para modelo {settings.RETRY_MODEL}...", 0)
-                            current_model = settings.RETRY_MODEL
+                            logger.warning(f"Erro {error_type} na pág {current_page_num_in_doc}. Alternando para o modelo {self.retry_model}.")
+                            log_cb(f"⚠️ Erro {error_type} na pág {current_page_num_in_doc} (tentativa {attempt + 1}/{MAX_RETRIES}): {e}. Alternando para modelo {self.retry_model}...", 0)
+                            current_model = self.retry_model
                             wait_time = 2
                         else:
                             wait_time = 2 ** attempt * 5

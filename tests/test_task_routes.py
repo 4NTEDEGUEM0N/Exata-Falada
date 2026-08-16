@@ -1,6 +1,6 @@
 import pytest
 from models.task_model import TaskModel
-from routes.converter_routes import TaskStatusEnum
+from schemas import TaskStatusEnum
 
 @pytest.fixture
 def auth_headers(client):

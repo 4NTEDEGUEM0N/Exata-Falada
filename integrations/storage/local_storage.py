@@ -69,7 +69,6 @@ class LocalStorageProvider(StorageProvider):
             
         raise ResourceNotFoundException(f"Arquivo PDF não encontrado: {file_path}")
 
-
     def exists(self, file_path: str) -> bool:
         """Verifica se um arquivo existe no disco."""
         if os.path.isabs(file_path) or os.path.exists(file_path):

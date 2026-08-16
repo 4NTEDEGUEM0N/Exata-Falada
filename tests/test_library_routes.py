@@ -57,7 +57,7 @@ def test_get_all_books_unauthorized(client, auth_headers):
     response = client.get("/library/", headers=auth_headers)
     assert response.status_code == 401
 
-@patch('routes.library_routes.settings')
+@patch('services.library_service.settings')
 def test_create_book_success_admin(mock_settings, client, admin_auth_headers, tmp_path):
     mock_settings.LIBRARY_DIR = str(tmp_path)
     file_content = b"<html><body>valid content</body></html>"

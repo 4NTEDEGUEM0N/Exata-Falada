@@ -4,6 +4,30 @@ from typing import List, Dict, Optional, Any, Callable
 class AIProvider(ABC):
     """Interface abstrata / contrato obrigatório para provedores de Inteligência Artificial."""
 
+    @property
+    @abstractmethod
+    def available_models(self) -> List[str]:
+        """Retorna a lista de identificadores dos modelos suportados pelo provedor."""
+        pass
+
+    @property
+    @abstractmethod
+    def default_model(self) -> str:
+        """Retorna o identificador do modelo padrão utilizado pelo provedor."""
+        pass
+
+    @property
+    @abstractmethod
+    def retry_model(self) -> str:
+        """Retorna o identificador do modelo utilizado para fallback."""
+        pass
+
+    @property
+    @abstractmethod
+    def max_retries(self) -> int:
+        """Retorna a quantidade máxima de tentativas por página."""
+        pass
+
     @abstractmethod
     def processar_pagina_imagem(
         self,

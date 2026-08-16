@@ -5,7 +5,7 @@ from typing import Dict, Any, Optional
 from fastapi import UploadFile, BackgroundTasks
 from config import settings
 from repositories.task_repository import TaskRepository
-from integrations.storage.base import StorageProvider, StorageDownloadInfo
+from integrations.storage.base import StorageProvider, StorageDownloadInfo, MediaType
 from integrations.ai.base import AIProvider
 from services.pdf_service import PdfService
 from services.html_service import HtmlService
@@ -51,22 +51,23 @@ class ConverterService:
         background_tasks: BackgroundTasks
     ) -> Dict[str, Any]:
         """Valida a requisição, persiste o upload, cria o registro da tarefa e agenda o processamento assíncrono."""
-        if file.content_type != "application/pdf":
+        if file.content_type != MediaType.PDF.value:
             raise BusinessException("O arquivo deve ser um PDF.")
 
         if file.size and file.size > settings.MAX_FILE_SIZE:
             raise BusinessException("Arquivo muito grande. O limite é 50MB.", status_code=413)
 
+        default_model = self.ai_provider.default_model
         # Regra de negócio: usuários não-admin utilizam os parâmetros padrão da aplicação
         if not current_user.admin:
             dpi = settings.DEFAULT_DPI
-            gemini_workers = settings.DEFAULT_GEMINI_WORKERS
-            gemini_model = settings.DEFAULT_MODEL
+            workers = settings.DEFAULT_WORKERS
+            ai_model = default_model
             report_button = settings.DEFAULT_REPORT_BUTTON
         else:
             dpi = converter_req.dpi or settings.DEFAULT_DPI
-            gemini_workers = converter_req.gemini_workers or settings.DEFAULT_GEMINI_WORKERS
-            gemini_model = converter_req.gemini_model or settings.DEFAULT_MODEL
+            workers = converter_req.workers or settings.DEFAULT_WORKERS
+            ai_model = converter_req.ai_model or default_model
             report_button = converter_req.report_button if converter_req.report_button is not None else settings.DEFAULT_REPORT_BUTTON
 
         sanitized_name = sanitize_filename(file.filename)
@@ -92,8 +93,8 @@ class ConverterService:
             pdf_basename=sanitized_name,
             paginas_str=converter_req.paginas or "",
             dpi=dpi,
-            gemini_workers=gemini_workers,
-            gemini_model=gemini_model,
+            workers=workers,
+            ai_model=ai_model,
             report_button=report_button,
             user_id=current_user.id
         )
@@ -110,8 +111,8 @@ class ConverterService:
         pdf_basename: str,
         paginas_str: str,
         dpi: int,
-        gemini_workers: int,
-        gemini_model: str,
+        workers: int,
+        ai_model: str,
         report_button: bool,
         user_id: int
     ) -> None:
@@ -153,8 +154,8 @@ class ConverterService:
             resultados_ia = self.ai_provider.analisar_imagens_paralelo(
                 pdf_basename=pdf_basename,
                 lista_caminhos=lista_caminhos_imgs,
-                model_name=gemini_model,
-                workers=gemini_workers,
+                model_name=ai_model,
+                workers=workers,
                 log_cb=log_cb
             )
 

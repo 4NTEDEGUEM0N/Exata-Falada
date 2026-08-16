@@ -242,8 +242,8 @@ uploadForm.addEventListener('submit', async (e) => {
         const reportButton = document.getElementById('report-button').checked;
 
         if (dpi) formData.append('dpi', dpi);
-        if (workers) formData.append('gemini_workers', workers);
-        if (model) formData.append('gemini_model', model);
+        if (workers) formData.append('workers', workers);
+        if (model) formData.append('ai_model', model);
         formData.append('report_button', reportButton);
     }
 

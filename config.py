@@ -39,12 +39,8 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     MAX_FILE_SIZE: int = 50 * 1024 * 1024
     DEFAULT_DPI: int = 100
-    DEFAULT_GEMINI_WORKERS: int = 4
+    DEFAULT_WORKERS: int = 4
     DEFAULT_REPORT_BUTTON: bool = False
-    DEFAULT_MODEL: str = "gemini-2.5-flash-lite" # Atualizar com frequência a partir de https://ai.google.dev/gemini-api/docs/models
-    MODELS_LIST: list[str] = ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.5-pro", "gemini-3.1-flash-lite", "gemini-3-flash-preview", "gemini-3.1-pro-preview", "gemini-3.5-flash"]
-    RETRY_MODEL: str = "gemini-3.1-flash-lite"
-    MAX_RETRIES: int = 3
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

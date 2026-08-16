@@ -1,13 +1,12 @@
 from pydantic import BaseModel
 from typing import Optional, List
 from config import settings
-from .task_schemas import TaskStatusEnum
 
 class ConverterRequest(BaseModel):
     paginas: Optional[str] = ""
     dpi: Optional[int] = settings.DEFAULT_DPI
-    gemini_workers: Optional[int] = settings.DEFAULT_GEMINI_WORKERS
-    gemini_model: Optional[str] = settings.DEFAULT_MODEL
+    workers: Optional[int] = settings.DEFAULT_WORKERS
+    ai_model: Optional[str] = None
     report_button: Optional[bool] = settings.DEFAULT_REPORT_BUTTON
 
 class ModelsResponse(BaseModel):
