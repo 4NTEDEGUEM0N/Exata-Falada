@@ -15,6 +15,10 @@ from integrations.ai.base import AIProvider
 from integrations.ai.factory import AIFactory
 from services.pdf_service import PdfService
 from services.patcher_service import PatcherService
+from services.auth_service import AuthService
+from services.user_service import UserService
+from services.task_service import TaskService
+from services.library_service import LibraryService
 
 # Re-export oauth2_scheme com padrão PEP8 e mantendo retrocompatibilidade
 oauth2_scheme = oatuh2_schema
@@ -54,6 +58,32 @@ def get_pdf_service() -> PdfService:
 def get_patcher_service() -> PatcherService:
     """Provedor de injeção de dependência para o PatcherService."""
     return PatcherService()
+
+def get_auth_service(
+    user_repo: UserRepository = Depends(get_user_repository)
+) -> AuthService:
+    """Provedor de injeção de dependência para o AuthService."""
+    return AuthService(user_repo)
+
+def get_user_service(
+    user_repo: UserRepository = Depends(get_user_repository)
+) -> UserService:
+    """Provedor de injeção de dependência para o UserService."""
+    return UserService(user_repo)
+
+def get_task_service(
+    task_repo: TaskRepository = Depends(get_task_repository)
+) -> TaskService:
+    """Provedor de injeção de dependência para o TaskService."""
+    return TaskService(task_repo)
+
+def get_library_service(
+    book_repo: BookRepository = Depends(get_book_repository),
+    library_repo: LibraryRepository = Depends(get_library_repository),
+    user_repo: UserRepository = Depends(get_user_repository)
+) -> LibraryService:
+    """Provedor de injeção de dependência para o LibraryService."""
+    return LibraryService(book_repo, library_repo, user_repo)
 
 
 # --- Authentication & Current User ---
