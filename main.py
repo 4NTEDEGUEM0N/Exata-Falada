@@ -2,10 +2,10 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from core import upgrade_db
+from app.core import upgrade_db
 import logging
 
-from api.routers import (
+from app.api.routers import (
     user_router,
     converter_router,
     task_router,

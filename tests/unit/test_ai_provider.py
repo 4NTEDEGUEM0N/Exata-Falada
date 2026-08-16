@@ -1,5 +1,5 @@
 from unittest.mock import patch, MagicMock, mock_open
-from integrations.ai.gemini_provider import GeminiProvider
+from app.integrations.ai.gemini_provider import GeminiProvider
 
 def test_gemini_provider_models():
     provider = GeminiProvider(api_key="dummy_key")

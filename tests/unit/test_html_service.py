@@ -1,4 +1,4 @@
-from services.html_service import HtmlService
+from app.services.html_service import HtmlService
 
 def test_clean_html_response_markdown_fence():
     raw = "```html\n<p>Texto com <bdi>x</bdi> e fórmula</p>\n```"

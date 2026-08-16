@@ -1,10 +1,10 @@
 import pytest
 from unittest.mock import patch
 import os
-from models.task_model import TaskModel
-from schemas import TaskStatusEnum
-from core import settings
-from services.converter_service import ConverterService
+from app.models.task_model import TaskModel
+from app.schemas import TaskStatusEnum
+from app.core import settings
+from app.services.converter_service import ConverterService
 
 @pytest.fixture
 def auth_headers(client):
@@ -73,7 +73,7 @@ def test_convert_pdf_without_auth(client):
     
     assert response.status_code == 401
 
-@patch('api.routers.converter_router.settings')
+@patch('app.api.routers.converter_router.settings')
 def test_convert_pdf_huge_file(mock_settings, client, auth_headers):
     mock_settings.MAX_FILE_SIZE = 10  # limite propositalmente pequeno
     

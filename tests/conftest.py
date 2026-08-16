@@ -8,8 +8,8 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from main import app
-from core import Base, get_db, get_password_hash
-from models.user_model import UserModel
+from app.core import Base, get_db, get_password_hash
+from app.models.user_model import UserModel
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 

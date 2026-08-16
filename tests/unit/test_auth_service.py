@@ -1,8 +1,8 @@
 import pytest
 from unittest.mock import MagicMock, patch
-from services.auth_service import AuthService
-from models.user_model import UserModel
-from core import UnauthorizedException, get_password_hash
+from app.services.auth_service import AuthService
+from app.models.user_model import UserModel
+from app.core import UnauthorizedException, get_password_hash
 
 def test_auth_service_authenticate_success():
     mock_repo = MagicMock()

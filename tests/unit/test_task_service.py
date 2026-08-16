@@ -1,9 +1,9 @@
 import pytest
 from unittest.mock import MagicMock
-from services.task_service import TaskService
-from models.user_model import UserModel
-from models.task_model import TaskModel
-from core.exceptions import UnauthorizedException, ResourceNotFoundException
+from app.services.task_service import TaskService
+from app.models.user_model import UserModel
+from app.models.task_model import TaskModel
+from app.core.exceptions import UnauthorizedException, ResourceNotFoundException
 
 def test_get_all_tasks_non_admin_forbidden():
     mock_repo = MagicMock()

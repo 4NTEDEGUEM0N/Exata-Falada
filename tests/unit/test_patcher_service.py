@@ -1,4 +1,4 @@
-from services.patcher_service import PatcherService
+from app.services.patcher_service import PatcherService
 
 def test_patch_html_contents_updates_and_orders():
     service = PatcherService()

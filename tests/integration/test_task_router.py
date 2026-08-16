@@ -1,6 +1,6 @@
 import pytest
-from models.task_model import TaskModel
-from schemas import TaskStatusEnum
+from app.models.task_model import TaskModel
+from app.schemas import TaskStatusEnum
 
 @pytest.fixture
 def auth_headers(client):

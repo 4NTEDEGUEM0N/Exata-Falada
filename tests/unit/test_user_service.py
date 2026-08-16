@@ -1,9 +1,9 @@
 import pytest
 from unittest.mock import MagicMock
-from services.user_service import UserService
-from models.user_model import UserModel
-from schemas.user_schemas import UserCreate
-from core.exceptions import UnauthorizedException, BusinessException, ResourceNotFoundException
+from app.services.user_service import UserService
+from app.models.user_model import UserModel
+from app.schemas.user_schemas import UserCreate
+from app.core.exceptions import UnauthorizedException, BusinessException, ResourceNotFoundException
 
 def test_create_user_non_admin_forbidden():
     mock_repo = MagicMock()

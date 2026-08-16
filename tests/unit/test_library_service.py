@@ -1,10 +1,10 @@
 import pytest
 from unittest.mock import MagicMock, patch
 import io
-from services.library_service import LibraryService
-from models.user_model import UserModel
-from models.book_model import BookModel
-from core.exceptions import UnauthorizedException, BusinessException, ResourceNotFoundException
+from app.services.library_service import LibraryService
+from app.models.user_model import UserModel
+from app.models.book_model import BookModel
+from app.core.exceptions import UnauthorizedException, BusinessException, ResourceNotFoundException
 
 def test_upload_book_non_admin_forbidden():
     mock_book = MagicMock()

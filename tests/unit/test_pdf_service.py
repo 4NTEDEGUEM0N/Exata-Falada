@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from services.pdf_service import PdfService
+from app.services.pdf_service import PdfService
 
 def test_parse_pages_empty_returns_all():
     pages = PdfService.parse_pages("", 5)

@@ -1,11 +1,11 @@
 import pytest
 from unittest.mock import MagicMock
-from services.converter_service import ConverterService
-from models.user_model import UserModel
-from models.task_model import TaskModel
-from schemas.task_schemas import TaskStatusEnum
-from schemas.converter_schemas import ConverterRequest
-from core.exceptions import BusinessException, ResourceNotFoundException, UnauthorizedException
+from app.services.converter_service import ConverterService
+from app.models.user_model import UserModel
+from app.models.task_model import TaskModel
+from app.schemas.task_schemas import TaskStatusEnum
+from app.schemas.converter_schemas import ConverterRequest
+from app.core.exceptions import BusinessException, ResourceNotFoundException, UnauthorizedException
 
 def test_initiate_conversion_invalid_type():
     mock_task_repo = MagicMock()
