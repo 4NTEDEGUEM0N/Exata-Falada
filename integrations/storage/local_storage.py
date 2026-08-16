@@ -1,8 +1,7 @@
 import os
 import shutil
 from typing import BinaryIO
-from config import settings
-from core.exceptions import ResourceNotFoundException
+from core import settings, ResourceNotFoundException
 from .base import StorageProvider, StorageDownloadInfo, StorageDeliveryType, MediaType
 
 class LocalStorageProvider(StorageProvider):

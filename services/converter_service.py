@@ -3,7 +3,14 @@ import time
 import logging
 from typing import Dict, Any, Optional
 from fastapi import UploadFile, BackgroundTasks
-from config import settings
+from core import (
+    settings,
+    SessionLocal,
+    BusinessException, 
+    ResourceNotFoundException, 
+    UnauthorizedException,
+    sanitize_filename
+)
 from repositories.task_repository import TaskRepository
 from integrations.storage.base import StorageProvider, StorageDownloadInfo, MediaType
 from integrations.ai.base import AIProvider
@@ -13,13 +20,6 @@ from models.user_model import UserModel
 from models.task_model import TaskModel
 from schemas.task_schemas import TaskStatusEnum
 from schemas.converter_schemas import ConverterRequest
-from core.exceptions import (
-    BusinessException, 
-    ResourceNotFoundException, 
-    UnauthorizedException
-)
-from core.utils import sanitize_filename
-from database import SessionLocal
 
 logger = logging.getLogger(__name__)
 

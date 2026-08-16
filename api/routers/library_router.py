@@ -6,8 +6,7 @@ from services.library_service import LibraryService
 from integrations.storage.base import MediaType
 from api.deps import get_library_service, get_current_user
 from models.user_model import UserModel
-from core.exceptions import BusinessException
-from config import settings
+from core import settings, BusinessException
 
 library_router = APIRouter(prefix="/library", tags=["library"])
 

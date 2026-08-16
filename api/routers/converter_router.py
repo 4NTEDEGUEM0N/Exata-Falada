@@ -1,7 +1,7 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, UploadFile, File, BackgroundTasks, Form
 from fastapi.responses import FileResponse, RedirectResponse
-from config import settings
+from core import settings, BusinessException
 from schemas import (
     ConverterRequest, 
     ConverterInitResponse, 
@@ -13,7 +13,6 @@ from integrations.ai.base import AIProvider
 from integrations.storage.base import StorageDeliveryType, MediaType
 from api.deps import get_converter_service, get_ai_provider, get_current_user
 from models.user_model import UserModel
-from core.exceptions import BusinessException
 
 converter_router = APIRouter(prefix="/converter", tags=["converter"])
 

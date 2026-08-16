@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional, List
-from config import settings
+from core import settings
 
 class ConverterRequest(BaseModel):
     paginas: Optional[str] = ""

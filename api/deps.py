@@ -1,10 +1,12 @@
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import Depends
 from sqlalchemy.orm import Session
-from database import get_db
-from security import decode_token, oatuh2_schema
+from core import (
+    get_db, 
+    decode_token, 
+    oauth2_scheme, 
+    UnauthorizedException
+)
 from models.user_model import UserModel
-from core.exceptions import UnauthorizedException
 from repositories.user_repository import UserRepository
 from repositories.task_repository import TaskRepository
 from repositories.book_repository import BookRepository
@@ -21,9 +23,6 @@ from services.user_service import UserService
 from services.task_service import TaskService
 from services.library_service import LibraryService
 from services.converter_service import ConverterService
-
-# Re-export oauth2_scheme com padrão PEP8 e mantendo retrocompatibilidade
-oauth2_scheme = oatuh2_schema
 
 # --- Repositories Injected Providers ---
 def get_user_repository(db: Session = Depends(get_db)) -> UserRepository:

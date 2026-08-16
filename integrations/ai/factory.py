@@ -1,4 +1,4 @@
-from config import settings
+from core import settings
 from .base import AIProvider
 from .gemini_provider import GeminiProvider
 

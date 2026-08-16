@@ -3,7 +3,7 @@ from unittest.mock import patch
 import os
 from models.task_model import TaskModel
 from schemas import TaskStatusEnum
-from config import settings
+from core import settings
 from services.converter_service import ConverterService
 
 @pytest.fixture

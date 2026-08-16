@@ -1,7 +1,11 @@
 from repositories.user_repository import UserRepository
-from security import verify_password, create_access_token, dummy_verify
+from core import (
+    verify_password, 
+    create_access_token, 
+    dummy_verify,
+    UnauthorizedException
+)
 from schemas.user_schemas import TokenResponse
-from core.exceptions import UnauthorizedException
 from models.user_model import UserModel
 
 class AuthService:

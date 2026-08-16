@@ -1,4 +1,4 @@
-from config import settings
+from core import settings
 from .base import StorageProvider
 from .local_storage import LocalStorageProvider
 from .s3_storage import S3StorageProvider

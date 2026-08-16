@@ -4,9 +4,9 @@ from sqlalchemy.orm import sessionmaker
 from alembic.config import Config
 from alembic import command
 import os
-from config import settings
 import logging
 import sys
+from .config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +17,7 @@ db = create_engine(DATABASE_URL)
 Base = declarative_base()
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=db)
+
 def get_db():
     db = SessionLocal()
     try:
@@ -25,7 +26,8 @@ def get_db():
         db.close()
 
 def upgrade_db():
-    base_dir = os.path.dirname(os.path.abspath(__file__))
+    # Caminho raiz da aplicação para localizar o alembic.ini
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     ini_path = os.path.join(base_dir, "alembic.ini")
     
     if sys.platform != "win32":
@@ -63,10 +65,9 @@ def _run_upgrade(ini_path):
     logger.info("Migrations successfully applied!")
     create_first_admin()
 
-
 def create_first_admin():
     from models.user_model import UserModel
-    from security import get_password_hash
+    from .security import get_password_hash
 
     db = SessionLocal() 
 

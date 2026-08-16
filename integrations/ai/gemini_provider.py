@@ -8,7 +8,7 @@ from functools import partial
 from typing import List, Dict, Optional, Any, Callable
 from PIL import Image
 from google import genai
-from config import settings
+from core import settings
 from prompt_html import get_prompt
 from .base import AIProvider
 from services.html_service import HtmlService

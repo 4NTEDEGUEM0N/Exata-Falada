@@ -2,7 +2,13 @@ import os
 import shutil
 from math import ceil
 from typing import Tuple, BinaryIO, Optional
-from config import settings
+from core import (
+    settings,
+    UnauthorizedException, 
+    BusinessException, 
+    ResourceNotFoundException,
+    sanitize_filename
+)
 from repositories.book_repository import BookRepository
 from repositories.library_repository import LibraryRepository
 from repositories.user_repository import UserRepository
@@ -10,8 +16,6 @@ from models.book_model import BookModel
 from models.user_model import UserModel
 from schemas.library_schemas import PaginatedBookResponse
 from schemas.user_schemas import PaginatedUserResponse
-from core.exceptions import UnauthorizedException, BusinessException, ResourceNotFoundException
-from core.utils import sanitize_filename
 
 class LibraryService:
     """Serviço de domínio responsável pela biblioteca de livros e permissões de acesso N:N."""

@@ -33,7 +33,6 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "files/uploads"
     OUTPUT_DIR: str = "files/output"
 
-
     """ Default variables """
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30 
     ALGORITHM: str = "HS256"

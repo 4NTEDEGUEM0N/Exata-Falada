@@ -4,8 +4,7 @@ from botocore.client import Config
 import tempfile
 import logging
 from typing import BinaryIO
-from config import settings
-from core.exceptions import ResourceNotFoundException, DomainException
+from core import settings, ResourceNotFoundException, DomainException
 from .base import StorageProvider, StorageDownloadInfo, StorageDeliveryType, MediaType
 
 logger = logging.getLogger(__name__)

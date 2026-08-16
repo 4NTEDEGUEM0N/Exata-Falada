@@ -3,8 +3,12 @@ from typing import Optional
 from repositories.user_repository import UserRepository
 from models.user_model import UserModel
 from schemas.user_schemas import UserCreate, PaginatedUserResponse
-from security import get_password_hash
-from core.exceptions import UnauthorizedException, BusinessException, ResourceNotFoundException
+from core import (
+    get_password_hash,
+    UnauthorizedException, 
+    BusinessException, 
+    ResourceNotFoundException
+)
 
 class UserService:
     """Serviço de domínio responsável pela gestão de usuários."""
