@@ -5,15 +5,28 @@ from database import get_db
 from security import decode_token, oatuh2_schema
 from models.user_model import UserModel
 from core.exceptions import UnauthorizedException
+from repositories.user_repository import UserRepository
+from repositories.task_repository import TaskRepository
 
 # Re-export oauth2_scheme com padrão PEP8 e mantendo retrocompatibilidade
 oauth2_scheme = oatuh2_schema
 
+# --- Repositories Injected Providers ---
+def get_user_repository(db: Session = Depends(get_db)) -> UserRepository:
+    """Provedor de injeção de dependência para o UserRepository."""
+    return UserRepository(db)
+
+def get_task_repository(db: Session = Depends(get_db)) -> TaskRepository:
+    """Provedor de injeção de dependência para o TaskRepository."""
+    return TaskRepository(db)
+
+
+# --- Authentication & Current User ---
 async def get_current_user(
-    db: Session = Depends(get_db), 
-    token: str = Depends(oauth2_scheme)
+    token: str = Depends(oauth2_scheme),
+    user_repo: UserRepository = Depends(get_user_repository)
 ) -> UserModel:
-    """Extrai e valida o token JWT, retornando a entidade UserModel autenticada."""
+    """Extrai e valida o token JWT, retornando a entidade UserModel autenticada via UserRepository."""
     payload = decode_token(token)
     if not payload:
         raise UnauthorizedException()
@@ -27,7 +40,7 @@ async def get_current_user(
     except (ValueError, TypeError):
         raise UnauthorizedException()
 
-    user = db.get(UserModel, user_id_int)
+    user = user_repo.get_by_id(user_id_int)
     if not user:
         raise UnauthorizedException()
     
