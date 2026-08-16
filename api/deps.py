@@ -9,6 +9,8 @@ from repositories.user_repository import UserRepository
 from repositories.task_repository import TaskRepository
 from repositories.book_repository import BookRepository
 from repositories.library_repository import LibraryRepository
+from integrations.storage.base import StorageProvider
+from integrations.storage.factory import StorageFactory
 
 # Re-export oauth2_scheme com padrão PEP8 e mantendo retrocompatibilidade
 oauth2_scheme = oatuh2_schema
@@ -29,6 +31,14 @@ def get_book_repository(db: Session = Depends(get_db)) -> BookRepository:
 def get_library_repository(db: Session = Depends(get_db)) -> LibraryRepository:
     """Provedor de injeção de dependência para o LibraryRepository."""
     return LibraryRepository(db)
+
+# --- Storage Provider Injected Provider ---
+def get_storage_provider() -> StorageProvider:
+    """Provedor de injeção de dependência para o StorageProvider ativo."""
+    return StorageFactory.get_provider()
+
+# Alias para retrocompatibilidade
+get_storage_adapter = get_storage_provider
 
 
 # --- Authentication & Current User ---
