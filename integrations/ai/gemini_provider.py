@@ -11,6 +11,7 @@ from google import genai
 from config import settings
 from prompt_html import get_prompt
 from .base import AIProvider
+from services.html_service import HtmlService
 
 logger = logging.getLogger(__name__)
 
@@ -23,29 +24,8 @@ class GeminiProvider(AIProvider):
 
     @staticmethod
     def limpar_resposta_html(response_text: str) -> Optional[str]:
-        """
-        Extrai o bloco HTML limpo da resposta do modelo Gemini,
-        removendo blocos markdown e higienizando tags <bdi>.
-        """
-        if not response_text:
-            return None
-
-        html_body = None
-        match = re.search(r"```html\s*(.*?)\s*```", response_text, re.DOTALL | re.IGNORECASE)
-        if match:
-            html_body = match.group(1).strip()
-        else:
-            trimmed_text = response_text.strip()
-            if trimmed_text.startswith("<") and trimmed_text.endswith(">") and \
-               re.search(r"<p|<div|<span|<table|<ul|<ol|<h[1-6]", trimmed_text, re.IGNORECASE):
-                html_body = trimmed_text
-
-        if html_body:
-            html_body = re.sub(r'<bdi>([a-zA-Z0-9_](?:<sup>.*?</sup>)?)</bdi>', r'\1', html_body)
-            html_body = re.sub(r'<bdi>(\\[a-zA-Z]+(?:\{.*?\})?(?:\s*\^\{.*?\})?(?:\s*_\{.*?\})?)</bdi>', r'\1', html_body)
-            html_body = re.sub(r'<bdi>\s*</bdi>', '', html_body)
-
-        return html_body
+        """Extrai o bloco HTML limpo da resposta do modelo Gemini"""
+        return HtmlService.clean_html_response(response_text)
 
     def processar_pagina_imagem(
         self,

@@ -15,10 +15,12 @@ from integrations.ai.base import AIProvider
 from integrations.ai.factory import AIFactory
 from services.pdf_service import PdfService
 from services.patcher_service import PatcherService
+from services.html_service import HtmlService
 from services.auth_service import AuthService
 from services.user_service import UserService
 from services.task_service import TaskService
 from services.library_service import LibraryService
+from services.converter_service import ConverterService
 
 # Re-export oauth2_scheme com padrão PEP8 e mantendo retrocompatibilidade
 oauth2_scheme = oatuh2_schema
@@ -59,6 +61,10 @@ def get_patcher_service() -> PatcherService:
     """Provedor de injeção de dependência para o PatcherService."""
     return PatcherService()
 
+def get_html_service() -> HtmlService:
+    """Provedor de injeção de dependência para o HtmlService."""
+    return HtmlService()
+
 def get_auth_service(
     user_repo: UserRepository = Depends(get_user_repository)
 ) -> AuthService:
@@ -84,6 +90,22 @@ def get_library_service(
 ) -> LibraryService:
     """Provedor de injeção de dependência para o LibraryService."""
     return LibraryService(book_repo, library_repo, user_repo)
+
+def get_converter_service(
+    task_repo: TaskRepository = Depends(get_task_repository),
+    storage_provider: StorageProvider = Depends(get_storage_provider),
+    ai_provider: AIProvider = Depends(get_ai_provider),
+    pdf_service: PdfService = Depends(get_pdf_service),
+    html_service: HtmlService = Depends(get_html_service)
+) -> ConverterService:
+    """Provedor de injeção de dependência para o ConverterService."""
+    return ConverterService(
+        task_repo=task_repo,
+        storage_provider=storage_provider,
+        ai_provider=ai_provider,
+        pdf_service=pdf_service,
+        html_service=html_service
+    )
 
 
 # --- Authentication & Current User ---
