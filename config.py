@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     LIBRARY_DIR: str = "files/library"
 
     STORAGE_PROVIDER: Literal["aws", "oracle", "local"] = "local"
+    AI_PROVIDER: Literal["gemini"] = "gemini"
     
     # === Credenciais AWS S3 (Opcionais) ===
     AWS_ACCESS_KEY_ID: str | None = None

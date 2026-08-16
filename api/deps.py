@@ -11,6 +11,8 @@ from repositories.book_repository import BookRepository
 from repositories.library_repository import LibraryRepository
 from integrations.storage.base import StorageProvider
 from integrations.storage.factory import StorageFactory
+from integrations.ai.base import AIProvider
+from integrations.ai.factory import AIFactory
 
 # Re-export oauth2_scheme com padrão PEP8 e mantendo retrocompatibilidade
 oauth2_scheme = oatuh2_schema
@@ -37,8 +39,10 @@ def get_storage_provider() -> StorageProvider:
     """Provedor de injeção de dependência para o StorageProvider ativo."""
     return StorageFactory.get_provider()
 
-# Alias para retrocompatibilidade
-get_storage_adapter = get_storage_provider
+# --- AI Provider Injected Provider ---
+def get_ai_provider() -> AIProvider:
+    """Provedor de injeção de dependência para o AIProvider ativo."""
+    return AIFactory.get_provider()
 
 
 # --- Authentication & Current User ---
