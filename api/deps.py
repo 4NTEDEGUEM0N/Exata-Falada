@@ -7,6 +7,8 @@ from models.user_model import UserModel
 from core.exceptions import UnauthorizedException
 from repositories.user_repository import UserRepository
 from repositories.task_repository import TaskRepository
+from repositories.book_repository import BookRepository
+from repositories.library_repository import LibraryRepository
 
 # Re-export oauth2_scheme com padrão PEP8 e mantendo retrocompatibilidade
 oauth2_scheme = oatuh2_schema
@@ -19,6 +21,14 @@ def get_user_repository(db: Session = Depends(get_db)) -> UserRepository:
 def get_task_repository(db: Session = Depends(get_db)) -> TaskRepository:
     """Provedor de injeção de dependência para o TaskRepository."""
     return TaskRepository(db)
+
+def get_book_repository(db: Session = Depends(get_db)) -> BookRepository:
+    """Provedor de injeção de dependência para o BookRepository."""
+    return BookRepository(db)
+
+def get_library_repository(db: Session = Depends(get_db)) -> LibraryRepository:
+    """Provedor de injeção de dependência para o LibraryRepository."""
+    return LibraryRepository(db)
 
 
 # --- Authentication & Current User ---
