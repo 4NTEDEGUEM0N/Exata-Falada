@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
 from fastapi.security import OAuth2PasswordRequestForm
 from math import ceil
+from api.deps import get_current_user, get_current_admin
 
 user_router = APIRouter(prefix="/user", tags=["user"])
 
@@ -45,21 +46,6 @@ async def loginToken(form_data: OAuth2PasswordRequestForm = Depends(), db: Sessi
         access_token = create_access_token(user.id)
         return TokenResponse(access_token=access_token, token_type="bearer")
 
-async def get_current_user(db: Session = Depends(get_db), token: str = Depends(oatuh2_schema)):
-    payload = decode_token(token)
-    if not payload:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="UNAUTHORIZED")
-    
-    user_id = payload.get("sub")
-    if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="UNAUTHORIZED")
-    
-    user_id = int(user_id)
-    user = db.get(UserModel, user_id)
-    if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="UNAUTHORIZED")
-    
-    return user
 
 @user_router.post("/signup", response_model=UserResponse)
 async def create_user(user_schema: UserCreate, db: Session = Depends(get_db), current_user: UserModel = Depends(get_current_user)):
