@@ -235,3 +235,50 @@ def test_get_status_not_found(client, auth_headers):
         headers=auth_headers
     )
     assert response.status_code == 404
+
+def test_download_file_not_completed(client, auth_headers, test_user_id, setup_db):
+    task = TaskModel(
+        pdf_filename="test_incomplete.pdf",
+        status=TaskStatusEnum.PROCESSING.value,
+        user_id=test_user_id,
+        storage_provider="local"
+    )
+    setup_db.add(task)
+    setup_db.commit()
+
+    response = client.get(
+        f"/converter/download/{task.id}",
+        headers=auth_headers
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Arquivo ainda não está pronto para download."
+
+def test_download_file_redirect(client, auth_headers, test_user_id, setup_db):
+    from app.integrations.storage.base import StorageDownloadInfo, StorageDeliveryType
+    
+    task = TaskModel(
+        pdf_filename="test_redirect.pdf",
+        status=TaskStatusEnum.COMPLETED.value,
+        user_id=test_user_id,
+        html_filename="redirect_output.html",
+        storage_provider="aws"
+    )
+    setup_db.add(task)
+    setup_db.commit()
+
+    with patch.object(
+        ConverterService, 
+        'get_task_download_info', 
+        return_value=StorageDownloadInfo(
+            type=StorageDeliveryType.REDIRECT,
+            url="https://s3.amazonaws.com/bucket/redirect_output.html"
+        )
+    ):
+        response = client.get(
+            f"/converter/download/{task.id}",
+            headers=auth_headers,
+            follow_redirects=False
+        )
+        assert response.status_code == 307
+        assert response.headers["location"] == "https://s3.amazonaws.com/bucket/redirect_output.html"
+
