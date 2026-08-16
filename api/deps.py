@@ -13,6 +13,8 @@ from integrations.storage.base import StorageProvider
 from integrations.storage.factory import StorageFactory
 from integrations.ai.base import AIProvider
 from integrations.ai.factory import AIFactory
+from services.pdf_service import PdfService
+from services.patcher_service import PatcherService
 
 # Re-export oauth2_scheme com padrão PEP8 e mantendo retrocompatibilidade
 oauth2_scheme = oatuh2_schema
@@ -43,6 +45,15 @@ def get_storage_provider() -> StorageProvider:
 def get_ai_provider() -> AIProvider:
     """Provedor de injeção de dependência para o AIProvider ativo."""
     return AIFactory.get_provider()
+
+# --- Services Injected Providers ---
+def get_pdf_service() -> PdfService:
+    """Provedor de injeção de dependência para o PdfService."""
+    return PdfService()
+
+def get_patcher_service() -> PatcherService:
+    """Provedor de injeção de dependência para o PatcherService."""
+    return PatcherService()
 
 
 # --- Authentication & Current User ---
