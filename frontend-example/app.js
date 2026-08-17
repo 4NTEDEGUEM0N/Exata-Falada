@@ -171,6 +171,15 @@ async function fetchModels(token) {
     }
 }
 
+// AI Provider Change Listener
+const aiProviderSelect = document.getElementById('ai-provider');
+if (aiProviderSelect) {
+    aiProviderSelect.addEventListener('change', () => {
+        const token = localStorage.getItem('token');
+        if (token) fetchModels(token);
+    });
+}
+
 // Login Submit
 loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -238,11 +247,13 @@ uploadForm.addEventListener('submit', async (e) => {
     if (!adminSettings.classList.contains('hidden')) {
         const dpi = document.getElementById('dpi').value;
         const workers = document.getElementById('workers').value;
+        const aiProvider = document.getElementById('ai-provider')?.value;
         const model = document.getElementById('model').value;
         const reportButton = document.getElementById('report-button').checked;
 
         if (dpi) formData.append('dpi', dpi);
         if (workers) formData.append('workers', workers);
+        if (aiProvider) formData.append('ai_provider', aiProvider);
         if (model) formData.append('ai_model', model);
         formData.append('report_button', reportButton);
     }
