@@ -1,9 +1,10 @@
+import os
+import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
-from app.core import upgrade_db
-import logging
+from app.core import settings, upgrade_db
 
 from app.api.routers import (
     user_router,
@@ -24,6 +25,10 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting Application...")
+    os.makedirs(settings.LIBRARY_DIR, exist_ok=True)
+    if settings.STORAGE_PROVIDER == "local":
+        os.makedirs(settings.OUTPUT_DIR, exist_ok=True)
+        os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     upgrade_db()
     logger.info("Initial setup completed.")
     yield

@@ -30,13 +30,24 @@ def test_deps_factories():
     assert get_book_repository(mock_db) is not None
     assert get_library_repository(mock_db) is not None
 
+    get_storage_provider.cache_clear()
+    get_ai_provider.cache_clear()
+
     with patch("app.integrations.storage.factory.StorageFactory.get_provider") as mock_sp:
-        get_storage_provider()
-        mock_sp.assert_called_once()
+        mock_instance = MagicMock()
+        mock_sp.return_value = mock_instance
+        res1 = get_storage_provider()
+        res2 = get_storage_provider()
+        assert res1 is res2
+        assert mock_sp.call_count == 1
 
     with patch("app.integrations.ai.factory.AIFactory.get_provider") as mock_ai:
-        get_ai_provider()
-        mock_ai.assert_called_once()
+        mock_ai_inst = MagicMock()
+        mock_ai.return_value = mock_ai_inst
+        res_ai1 = get_ai_provider()
+        res_ai2 = get_ai_provider()
+        assert res_ai1 is res_ai2
+        assert mock_ai.call_count == 1
 
     assert get_pdf_service() is not None
     assert get_patcher_service() is not None
@@ -104,8 +115,10 @@ async def test_get_current_admin_success():
     res = await get_current_admin(current_user=admin_user)
     assert res.admin is True
 
+from app.core import UnauthorizedException, ForbiddenException
+
 @pytest.mark.anyio
 async def test_get_current_admin_forbidden():
     normal_user = UserModel(id=2, username="normal", admin=False)
-    with pytest.raises(UnauthorizedException):
+    with pytest.raises(ForbiddenException):
         await get_current_admin(current_user=normal_user)

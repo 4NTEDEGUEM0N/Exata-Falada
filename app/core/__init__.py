@@ -12,7 +12,8 @@ from .exceptions import (
     DomainException,
     BusinessException,
     ResourceNotFoundException,
-    UnauthorizedException
+    UnauthorizedException,
+    ForbiddenException
 )
 from .utils import sanitize_filename
 from .prompt_html import get_prompt, get_html
@@ -36,6 +37,7 @@ __all__ = [
     "BusinessException",
     "ResourceNotFoundException",
     "UnauthorizedException",
+    "ForbiddenException",
     "sanitize_filename",
     "get_prompt",
     "get_html"

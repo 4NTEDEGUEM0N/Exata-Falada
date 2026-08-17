@@ -58,11 +58,3 @@ class Settings(BaseSettings):
         return self
 
 settings = Settings()
-if not os.path.exists(settings.OUTPUT_DIR):
-    os.makedirs(settings.OUTPUT_DIR)
-
-if not os.path.exists(settings.UPLOAD_DIR):
-    os.makedirs(settings.UPLOAD_DIR)
-
-if not os.path.exists(settings.LIBRARY_DIR):
-    os.makedirs(settings.LIBRARY_DIR)

@@ -116,3 +116,35 @@ def test_get_db_generator():
         next(gen)
     except StopIteration:
         pass
+
+
+def test_domain_exceptions():
+    from app.core import (
+        DomainException,
+        BusinessException,
+        ResourceNotFoundException,
+        UnauthorizedException,
+        ForbiddenException
+    )
+    d = DomainException("Generic error")
+    assert d.status_code == 400
+    assert d.detail == "Generic error"
+
+    b = BusinessException("Business rule violated")
+    assert b.status_code == 400
+    assert b.detail == "Business rule violated"
+
+    r = ResourceNotFoundException()
+    assert r.status_code == 404
+    assert r.detail == "NOT FOUND"
+
+    u = UnauthorizedException()
+    assert u.status_code == 401
+    assert u.detail == "UNAUTHORIZED"
+
+    f = ForbiddenException("Access Denied")
+    assert f.status_code == 403
+    assert f.detail == "Access Denied"
+    f_default = ForbiddenException()
+    assert f_default.status_code == 403
+    assert f_default.detail == "FORBIDDEN"

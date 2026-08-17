@@ -134,7 +134,7 @@ def test_download_file_unauthorized_user(client, auth_headers, other_user_auth_h
         headers=auth_headers
     )
     
-    assert response.status_code == 401
+    assert response.status_code == 403
 
 def test_download_file_not_found_in_db(client, auth_headers):
     response = client.get(
@@ -211,7 +211,7 @@ def test_get_status_unauthorized(client, auth_headers, other_user_auth_headers, 
         f"/converter/status/{task.id}",
         headers=auth_headers
     )
-    assert response.status_code == 401
+    assert response.status_code == 403
 
 def test_get_status_admin_access_other(client, auth_headers, other_user_auth_headers, test_user_id, setup_db):
     task = TaskModel(

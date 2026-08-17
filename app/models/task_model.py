@@ -15,7 +15,7 @@ class TaskModel(Base):
     created_at = Column("created_at", DateTime, server_default=func.now(), nullable=False)
     
     progress = Column("progress", Integer, default=0)
-    logs = Column("logs", Text, default=datetime.now())
+    logs = Column("logs", Text, default="")
 
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     user = relationship("UserModel", back_populates="task")

@@ -84,6 +84,8 @@ class PdfService:
                     log_cb(f"Página {numero_pagina + 1} extraída.", 0)
         except Exception as e:
             logger.error(f"Erro ao converter PDF para imagens: {e}", exc_info=True)
+            if os.path.exists(pasta_saida):
+                shutil.rmtree(pasta_saida, ignore_errors=True)
             raise RuntimeError(f"Erro na conversão PDF para imagem: {e}")
 
         return pasta_saida, image_paths

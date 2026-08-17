@@ -55,7 +55,7 @@ def test_get_all_books_admin(client, admin_auth_headers, dummy_book):
 
 def test_get_all_books_unauthorized(client, auth_headers):
     response = client.get("/library/", headers=auth_headers)
-    assert response.status_code == 401
+    assert response.status_code == 403
 
 @patch('app.services.library_service.settings')
 def test_create_book_success_admin(mock_settings, client, admin_auth_headers, tmp_path):
@@ -75,7 +75,7 @@ def test_create_book_unauthorized(client, auth_headers):
     file_content = b"<html><body>valid content</body></html>"
     files = {"file": ("test_upload.html", file_content, "text/html")}
     response = client.post("/library/", headers=auth_headers, files=files)
-    assert response.status_code == 401
+    assert response.status_code == 403
 
 def test_create_book_invalid_type(client, admin_auth_headers):
     file_content = b"<html><body>valid content</body></html>"
@@ -107,7 +107,7 @@ def test_add_book_to_user_unauthorized(client, auth_headers, test_user_id, dummy
         f"/library/add/{test_user_id}/{dummy_book.id}",
         headers=auth_headers
     )
-    assert response.status_code == 401
+    assert response.status_code == 403
 
 def test_remove_book_from_user_admin(client, admin_auth_headers, test_user_id, dummy_book, setup_db):
     # Add first
@@ -144,7 +144,7 @@ def test_get_all_user_books_admin(client, admin_auth_headers, test_user_id):
 
 def test_get_all_user_books_unauthorized(client, auth_headers, admin_user_id):
     response = client.get(f"/library/books/{admin_user_id}", headers=auth_headers)
-    assert response.status_code == 401
+    assert response.status_code == 403
 
 def test_get_all_book_users_admin(client, admin_auth_headers, dummy_book):
     response = client.get(f"/library/users/{dummy_book.id}", headers=admin_auth_headers)
@@ -152,7 +152,7 @@ def test_get_all_book_users_admin(client, admin_auth_headers, dummy_book):
 
 def test_get_all_book_users_unauthorized(client, auth_headers, dummy_book):
     response = client.get(f"/library/users/{dummy_book.id}", headers=auth_headers)
-    assert response.status_code == 401
+    assert response.status_code == 403
 
 def test_get_book_file_admin(client, admin_auth_headers, dummy_book):
     response = client.get(f"/library/{dummy_book.id}", headers=admin_auth_headers)
@@ -178,7 +178,7 @@ def test_get_book_file_user_without_access(client, auth_headers, setup_db, tmp_p
     setup_db.refresh(book2)
     
     response = client.get(f"/library/{book2.id}", headers=auth_headers)
-    assert response.status_code == 401
+    assert response.status_code == 403
 
 def test_get_book_file_not_found(client, admin_auth_headers):
     response = client.get("/library/9999", headers=admin_auth_headers)
@@ -186,7 +186,7 @@ def test_get_book_file_not_found(client, admin_auth_headers):
 
 def test_delete_book_unauthorized(client, auth_headers, dummy_book):
     response = client.post(f"/library/delete/{dummy_book.id}", headers=auth_headers)
-    assert response.status_code == 401
+    assert response.status_code == 403
 
 def test_delete_book_not_found(client, admin_auth_headers):
     response = client.post("/library/delete/9999", headers=admin_auth_headers)

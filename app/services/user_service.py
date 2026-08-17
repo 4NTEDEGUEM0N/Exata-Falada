@@ -1,11 +1,10 @@
 from math import ceil
-from typing import Optional
 from app.repositories.user_repository import UserRepository
 from app.models.user_model import UserModel
 from app.schemas.user_schemas import UserCreate, PaginatedUserResponse
 from app.core import (
     get_password_hash,
-    UnauthorizedException, 
+    ForbiddenException,
     BusinessException, 
     ResourceNotFoundException
 )
@@ -19,7 +18,7 @@ class UserService:
     def create_user(self, user_in: UserCreate, current_user: UserModel) -> UserModel:
         """Cria um novo usuário no sistema. Exige privilégio de admin."""
         if not current_user.admin:
-            raise UnauthorizedException()
+            raise ForbiddenException("Apenas administradores podem cadastrar novos usuários.")
 
         existing = self.user_repo.get_by_username(user_in.username)
         if existing:
@@ -35,13 +34,13 @@ class UserService:
 
     def get_paginated_users(
         self, 
+        current_user: UserModel,
         page: int = 1, 
-        limit: int = 10, 
-        current_user: Optional[UserModel] = None
+        limit: int = 10
     ) -> PaginatedUserResponse:
         """Retorna uma lista paginada de usuários cadastrados. Exige privilégio de admin."""
-        if current_user and not current_user.admin:
-            raise UnauthorizedException()
+        if not current_user.admin:
+            raise ForbiddenException("Acesso restrito a administradores.")
 
         users, total = self.user_repo.get_paginated(page=page, limit=limit)
         total_pages = ceil(total / limit) if limit > 0 else 1
@@ -55,12 +54,12 @@ class UserService:
     def delete_user(self, user_id: int, current_user: UserModel) -> None:
         """Exclui um usuário. Impede a autoexclusão e exige privilégio de admin."""
         if not current_user.admin:
-            raise UnauthorizedException()
+            raise ForbiddenException("Apenas administradores podem excluir usuários.")
         if user_id == current_user.id:
-            raise UnauthorizedException()
+            raise BusinessException("Não é permitido excluir o próprio usuário autenticado.")
 
         user = self.user_repo.get_by_id(user_id)
         if not user:
-            raise ResourceNotFoundException()
+            raise ResourceNotFoundException("Usuário não encontrado.")
 
         self.user_repo.delete(user)

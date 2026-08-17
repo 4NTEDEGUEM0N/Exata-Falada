@@ -1,10 +1,9 @@
 from math import ceil
-from typing import Optional
 from app.repositories.task_repository import TaskRepository
 from app.models.task_model import TaskModel
 from app.models.user_model import UserModel
 from app.schemas.task_schemas import PaginatedTaskResponse
-from app.core.exceptions import UnauthorizedException, ResourceNotFoundException
+from app.core.exceptions import ForbiddenException, ResourceNotFoundException
 
 class TaskService:
     """Serviço de domínio responsável pelo ciclo de vida e consultas de tarefas."""
@@ -14,13 +13,13 @@ class TaskService:
 
     def get_all_tasks(
         self, 
+        current_user: UserModel,
         page: int = 1, 
-        limit: int = 10, 
-        current_user: Optional[UserModel] = None
+        limit: int = 10
     ) -> PaginatedTaskResponse:
         """Retorna todas as tarefas paginadas. Exige privilégio de admin."""
-        if current_user and not current_user.admin:
-            raise UnauthorizedException()
+        if not current_user.admin:
+            raise ForbiddenException("Acesso restrito a administradores.")
 
         tasks, total = self.task_repo.get_all_paginated(page=page, limit=limit)
         total_pages = ceil(total / limit) if limit > 0 else 1
@@ -34,13 +33,13 @@ class TaskService:
     def get_user_tasks(
         self, 
         user_id: int, 
+        current_user: UserModel,
         page: int = 1, 
-        limit: int = 10, 
-        current_user: Optional[UserModel] = None
+        limit: int = 10
     ) -> PaginatedTaskResponse:
         """Retorna as tarefas de um usuário específico paginadas. Valida se é o próprio usuário ou admin."""
-        if current_user and user_id != current_user.id and not current_user.admin:
-            raise UnauthorizedException()
+        if user_id != current_user.id and not current_user.admin:
+            raise ForbiddenException("Sem permissão para visualizar tarefas de outros usuários.")
 
         tasks, total = self.task_repo.get_by_user_id_paginated(user_id=user_id, page=page, limit=limit)
         total_pages = ceil(total / limit) if limit > 0 else 1
@@ -55,10 +54,10 @@ class TaskService:
         """Busca uma tarefa por ID com validação de permissão (dono ou admin)."""
         task = self.task_repo.get_by_id(task_id)
         if not task:
-            raise ResourceNotFoundException()
+            raise ResourceNotFoundException("Tarefa não encontrada.")
 
         if task.user_id != current_user.id and not current_user.admin:
-            raise UnauthorizedException()
+            raise ForbiddenException("Sem permissão para acessar esta tarefa.")
 
         return task
 

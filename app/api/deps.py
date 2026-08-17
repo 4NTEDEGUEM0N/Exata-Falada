@@ -1,10 +1,12 @@
+from functools import lru_cache
 from fastapi import Depends
 from sqlalchemy.orm import Session
 from app.core import (
     get_db, 
     decode_token, 
     oauth2_scheme, 
-    UnauthorizedException
+    UnauthorizedException,
+    ForbiddenException
 )
 from app.models.user_model import UserModel
 from app.repositories.user_repository import UserRepository
@@ -42,13 +44,15 @@ def get_library_repository(db: Session = Depends(get_db)) -> LibraryRepository:
     return LibraryRepository(db)
 
 # --- Storage Provider Injected Provider ---
+@lru_cache
 def get_storage_provider() -> StorageProvider:
-    """Provedor de injeção de dependência para o StorageProvider ativo."""
+    """Provedor de injeção de dependência em cache (singleton) para o StorageProvider ativo."""
     return StorageFactory.get_provider()
 
 # --- AI Provider Injected Provider ---
+@lru_cache
 def get_ai_provider() -> AIProvider:
-    """Provedor de injeção de dependência para o AIProvider ativo."""
+    """Provedor de injeção de dependência em cache (singleton) para o AIProvider ativo."""
     return AIFactory.get_provider()
 
 # --- Services Injected Providers ---
@@ -137,5 +141,5 @@ async def get_current_admin(
 ) -> UserModel:
     """Garante que o usuário autenticado atual possui privilégios de administrador."""
     if not current_user.admin:
-        raise UnauthorizedException()
+        raise ForbiddenException("Acesso restrito a administradores.")
     return current_user

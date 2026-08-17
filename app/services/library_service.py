@@ -1,10 +1,10 @@
 import os
 import shutil
 from math import ceil
-from typing import Tuple, BinaryIO, Optional
+from typing import Tuple, BinaryIO
 from app.core import (
     settings,
-    UnauthorizedException, 
+    ForbiddenException,
     BusinessException, 
     ResourceNotFoundException,
     sanitize_filename
@@ -39,7 +39,7 @@ class LibraryService:
     ) -> BookModel:
         """Valida e persiste um livro HTML na biblioteca. Exige admin."""
         if not current_user.admin:
-            raise UnauthorizedException()
+            raise ForbiddenException("Apenas administradores podem adicionar livros à biblioteca.")
 
         if "</html>" not in content.lower():
             raise BusinessException("Conteúdo HTML inválido no arquivo.")
@@ -56,13 +56,13 @@ class LibraryService:
 
     def get_all_books(
         self, 
+        current_user: UserModel,
         page: int = 1, 
-        limit: int = 10, 
-        current_user: Optional[UserModel] = None
+        limit: int = 10
     ) -> PaginatedBookResponse:
         """Retorna todos os livros cadastrados na biblioteca. Exige admin."""
-        if current_user and not current_user.admin:
-            raise UnauthorizedException()
+        if not current_user.admin:
+            raise ForbiddenException("Acesso restrito a administradores.")
 
         books, total = self.book_repo.get_paginated(page=page, limit=limit)
         total_pages = ceil(total / limit) if limit > 0 else 1
@@ -76,13 +76,13 @@ class LibraryService:
     def get_user_books(
         self, 
         user_id: int, 
+        current_user: UserModel,
         page: int = 1, 
-        limit: int = 10, 
-        current_user: Optional[UserModel] = None
+        limit: int = 10
     ) -> PaginatedBookResponse:
         """Retorna os livros liberados para um usuário."""
-        if current_user and user_id != current_user.id and not current_user.admin:
-            raise UnauthorizedException()
+        if user_id != current_user.id and not current_user.admin:
+            raise ForbiddenException("Sem permissão para visualizar livros de outros usuários.")
 
         books, total = self.library_repo.get_user_books_paginated(user_id=user_id, page=page, limit=limit)
         total_pages = ceil(total / limit) if limit > 0 else 1
@@ -96,13 +96,13 @@ class LibraryService:
     def get_book_users(
         self, 
         book_id: int, 
+        current_user: UserModel,
         page: int = 1, 
-        limit: int = 10, 
-        current_user: Optional[UserModel] = None
+        limit: int = 10
     ) -> PaginatedUserResponse:
         """Retorna os usuários que têm acesso a um livro. Exige admin."""
-        if current_user and not current_user.admin:
-            raise UnauthorizedException()
+        if not current_user.admin:
+            raise ForbiddenException("Acesso restrito a administradores.")
 
         users, total = self.library_repo.get_book_users_paginated(book_id=book_id, page=page, limit=limit)
         total_pages = ceil(total / limit) if limit > 0 else 1
@@ -116,37 +116,37 @@ class LibraryService:
     def add_user_access(self, user_id: int, book_id: int, current_user: UserModel) -> None:
         """Associa um livro a um usuário. Exige admin."""
         if not current_user.admin:
-            raise UnauthorizedException()
+            raise ForbiddenException("Apenas administradores podem associar livros a usuários.")
 
         self.library_repo.add_association(user_id=user_id, book_id=book_id)
 
     def remove_user_access(self, user_id: int, book_id: int, current_user: UserModel) -> None:
         """Remove o acesso de um usuário a um livro. Exige admin."""
         if not current_user.admin:
-            raise UnauthorizedException()
+            raise ForbiddenException("Apenas administradores podem desassociar livros de usuários.")
 
         removed = self.library_repo.remove_association(user_id=user_id, book_id=book_id)
         if not removed:
-            raise ResourceNotFoundException()
+            raise ResourceNotFoundException("Associação não encontrada.")
 
     def get_book_file(self, book_id: int, current_user: UserModel) -> Tuple[str, str]:
         """Verifica a permissão e retorna (file_path, filename) para entrega do arquivo."""
         book = self.book_repo.get_by_id(book_id)
         if not book:
-            raise ResourceNotFoundException()
+            raise ResourceNotFoundException("Livro não encontrado.")
 
         if not current_user.admin and not self.library_repo.has_user_access(current_user.id, book_id):
-            raise UnauthorizedException()
+            raise ForbiddenException("Sem permissão para baixar este livro.")
 
         return book.file_path, book.filename
 
     def delete_book(self, book_id: int, current_user: UserModel) -> None:
         """Exclui um livro e suas associações da biblioteca. Exige admin."""
         if not current_user.admin:
-            raise UnauthorizedException()
+            raise ForbiddenException("Apenas administradores podem excluir livros da biblioteca.")
 
         book = self.book_repo.get_by_id(book_id)
         if not book:
-            raise ResourceNotFoundException()
+            raise ResourceNotFoundException("Livro não encontrado.")
 
         self.book_repo.delete(book)

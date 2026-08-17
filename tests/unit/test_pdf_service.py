@@ -64,13 +64,16 @@ def test_convert_to_images_success(mock_makedirs, mock_fitz_open):
     assert mock_pixmap.save.call_count == 2
     assert len(logs) == 2
 
+@patch('shutil.rmtree')
+@patch('os.path.exists', return_value=True)
 @patch('fitz.open')
-def test_convert_to_images_error(mock_fitz_open):
+def test_convert_to_images_error(mock_fitz_open, mock_exists, mock_rmtree):
     mock_fitz_open.side_effect = RuntimeError("Corrupted PDF")
 
     with pytest.raises(RuntimeError) as exc:
         PdfService.convert_to_images("broken.pdf", [0])
     assert "Erro na conversão PDF para imagem" in str(exc.value)
+    mock_rmtree.assert_called_once()
 
 @patch('shutil.rmtree')
 @patch('os.path.exists')

@@ -1,14 +1,17 @@
 import os
 import time
 import logging
+import threading
 from typing import Dict, Any, Optional
 from fastapi import UploadFile, BackgroundTasks
 from app.core import (
     settings,
     SessionLocal,
     BusinessException, 
+    DomainException,
     ResourceNotFoundException, 
     UnauthorizedException,
+    ForbiddenException,
     sanitize_filename
 )
 from app.repositories.task_repository import TaskRepository
@@ -71,21 +74,31 @@ class ConverterService:
             report_button = converter_req.report_button if converter_req.report_button is not None else settings.DEFAULT_REPORT_BUTTON
 
         sanitized_name = sanitize_filename(file.filename)
-        unique_filename = f"{current_user.id}_{int(time.time())}_{sanitized_name}"
 
-        # 1. Salva o PDF no storage ativo (Local, S3 ou OCI)
-        saved_path = self.storage_provider.save_upload_file(file.file, unique_filename)
-
-        # 2. Cria o registro da tarefa no banco de dados
+        # 1. Cria o registro da tarefa no banco de dados com status CREATED
         new_task = TaskModel(
-            pdf_filename=unique_filename,
+            pdf_filename=sanitized_name,
             status=TaskStatusEnum.CREATED.value,
             storage_provider=settings.STORAGE_PROVIDER,
             user_id=current_user.id
         )
         task = self.task_repo.create(new_task)
 
-        # 3. Enfileira a tarefa assíncrona
+        # 2. Gera nome único
+        unique_filename = f"{task.id}_{sanitized_name}"
+        task.pdf_filename = unique_filename
+        self.task_repo.commit()
+
+        # 3. Salva o PDF no storage ativo (Local, S3 ou OCI) com tratamento de erro
+        try:
+            saved_path = self.storage_provider.save_upload_file(file.file, unique_filename)
+        except Exception as e:
+            logger.error(f"Erro ao salvar arquivo no storage para tarefa {task.id}: {e}", exc_info=True)
+            self.task_repo.update_status(task.id, TaskStatusEnum.ERROR.value)
+            self.task_repo.append_log_and_progress(task.id, f"Erro no upload inicial: {e}")
+            raise DomainException("Falha ao armazenar arquivo enviado.", status_code=500)
+
+        # 4. Enfileira a tarefa assíncrona
         background_tasks.add_task(
             self.run_background_pipeline,
             task_id=task.id,
@@ -117,13 +130,24 @@ class ConverterService:
         user_id: int
     ) -> None:
         """Pipeline executado em background para processamento de ponta a ponta do PDF."""
-        # Cria uma sessão de banco isolada para thread de background
+        # Cria uma sessão de banco isolada para a thread principal de background
         db = SessionLocal()
         local_task_repo = TaskRepository(db)
         pasta_temp_imgs = None
+        caminho_pdf_local = None
+        db_lock = threading.Lock()
 
         def log_cb(message: str, increment_progress: int = 0):
-            local_task_repo.append_log_and_progress(task_id, message, increment_progress)
+            with db_lock:
+                thread_db = SessionLocal()
+                try:
+                    TaskRepository(thread_db).append_log_and_progress(
+                        task_id=task_id,
+                        message=message,
+                        increment_progress=increment_progress
+                    )
+                finally:
+                    thread_db.close()
 
         try:
             local_task_repo.update_status(task_id, TaskStatusEnum.PROCESSING.value)
@@ -166,9 +190,9 @@ class ConverterService:
                 content_list=resultados_ia
             )
 
-            # Passo 6: Persistência do HTML de saída no storage
+            # Passo 6: Persistência do HTML de saída no storage com identificador único da tarefa
             nome_base_sem_ext = os.path.splitext(pdf_basename)[0]
-            html_filename = f"{nome_base_sem_ext}.html"
+            html_filename = f"{task_id}_{nome_base_sem_ext}.html"
             html_bytes = html_completo.encode('utf-8')
             self.storage_provider.save_output_html(html_bytes, html_filename)
 
@@ -201,6 +225,18 @@ class ConverterService:
             # Passo 8: Limpeza de arquivos temporários
             if pasta_temp_imgs:
                 self.pdf_service.cleanup_temp_dir(pasta_temp_imgs)
+
+            # Remove o PDF temporário baixado da nuvem se o storage for remoto
+            if (
+                self.storage_provider.is_remote
+                and caminho_pdf_local
+                and os.path.exists(caminho_pdf_local)
+            ):
+                try:
+                    os.remove(caminho_pdf_local)
+                except OSError as err:
+                    logger.warning(f"Falha ao remover PDF temporário {caminho_pdf_local}: {err}")
+
             db.close()
 
     def get_task_download_info(self, task_id: int, current_user: UserModel) -> StorageDownloadInfo:
@@ -210,7 +246,7 @@ class ConverterService:
             raise ResourceNotFoundException("Tarefa não encontrada")
 
         if task.user_id != current_user.id and not current_user.admin:
-            raise UnauthorizedException()
+            raise ForbiddenException("Sem permissão para acessar o download desta tarefa.")
 
         if task.status not in (TaskStatusEnum.COMPLETED.value, TaskStatusEnum.COMPLETED_WITH_ERRORS.value):
             raise BusinessException("Arquivo ainda não está pronto para download.")
@@ -227,7 +263,7 @@ class ConverterService:
             raise ResourceNotFoundException("Tarefa não encontrada")
 
         if task.user_id != current_user.id and not current_user.admin:
-            raise UnauthorizedException()
+            raise ForbiddenException("Sem permissão para acessar os dados desta tarefa.")
 
         return {
             "status": task.status,

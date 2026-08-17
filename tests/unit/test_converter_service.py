@@ -6,8 +6,14 @@ from app.models.user_model import UserModel
 from app.models.task_model import TaskModel
 from app.schemas.task_schemas import TaskStatusEnum
 from app.schemas.converter_schemas import ConverterRequest
-from app.core.exceptions import BusinessException, ResourceNotFoundException, UnauthorizedException
 from app.integrations.storage.base import StorageDownloadInfo, StorageDeliveryType, MediaType
+from app.core.exceptions import (
+    BusinessException, 
+    DomainException,
+    ResourceNotFoundException, 
+    UnauthorizedException,
+    ForbiddenException
+)
 from app.core import settings
 
 
@@ -89,6 +95,32 @@ def test_initiate_conversion_normal_user_enforces_defaults():
     assert kwargs["ai_model"] == "default-gemini"
     assert kwargs["report_button"] == settings.DEFAULT_REPORT_BUTTON
 
+def test_initiate_conversion_storage_failure():
+    mock_task_repo = MagicMock()
+    mock_task_repo.create.return_value = TaskModel(id=12, status=TaskStatusEnum.CREATED.value)
+    mock_storage = MagicMock()
+    mock_storage.save_upload_file.side_effect = RuntimeError("Falha de conexão com S3")
+    mock_ai = MagicMock()
+    mock_ai.default_model = "default-gemini"
+
+    service = ConverterService(mock_task_repo, mock_storage, mock_ai, MagicMock(), MagicMock())
+
+    mock_file = MagicMock()
+    mock_file.content_type = "application/pdf"
+    mock_file.size = 1000
+    mock_file.filename = "doc.pdf"
+    mock_user = UserModel(id=1, username="admin", admin=True)
+    mock_bg = MagicMock()
+
+    with pytest.raises(DomainException) as exc_info:
+        service.initiate_conversion(mock_file, ConverterRequest(), mock_user, mock_bg)
+    
+    assert exc_info.value.status_code == 500
+    assert "Falha ao armazenar arquivo" in exc_info.value.detail
+    mock_task_repo.update_status.assert_called_once_with(12, TaskStatusEnum.ERROR.value)
+    mock_task_repo.append_log_and_progress.assert_called_once()
+    mock_bg.add_task.assert_not_called()
+
 
 # ==========================================================
 # 2. run_background_pipeline Tests
@@ -135,11 +167,11 @@ def test_run_background_pipeline_success(mock_session_local):
     mock_task_repo.update_completion.assert_called_once_with(
         task_id=1,
         status=TaskStatusEnum.COMPLETED.value,
-        html_filename="documento.html",
+        html_filename="1_documento.html",
         progress=100
     )
     mock_pdf.cleanup_temp_dir.assert_called_once_with("/tmp/imgs")
-    mock_db.close.assert_called_once()
+    assert mock_db.close.called
 
 @patch("app.services.converter_service.SessionLocal")
 def test_run_background_pipeline_with_ai_errors(mock_session_local):
@@ -179,7 +211,7 @@ def test_run_background_pipeline_with_ai_errors(mock_session_local):
     mock_task_repo.update_completion.assert_called_once_with(
         task_id=2,
         status=TaskStatusEnum.COMPLETED_WITH_ERRORS.value,
-        html_filename="documento.html",
+        html_filename="2_documento.html",
         progress=100
     )
 
@@ -248,7 +280,7 @@ def test_get_task_download_info_unauthorized():
     mock_task_repo.get_by_id.return_value = task
     service = ConverterService(mock_task_repo, MagicMock(), MagicMock(), MagicMock(), MagicMock())
 
-    with pytest.raises(UnauthorizedException):
+    with pytest.raises(ForbiddenException):
         service.get_task_download_info(task_id=1, current_user=UserModel(id=3, username="u", admin=False))
 
 def test_get_task_download_info_not_ready():
@@ -305,5 +337,95 @@ def test_get_task_status_unauthorized():
     mock_task_repo.get_by_id.return_value = task
     service = ConverterService(mock_task_repo, MagicMock(), MagicMock(), MagicMock(), MagicMock())
 
-    with pytest.raises(UnauthorizedException):
+    with pytest.raises(ForbiddenException):
         service.get_task_status(task_id=1, current_user=UserModel(id=3, username="u", admin=False))
+
+
+@patch("app.services.converter_service.SessionLocal")
+def test_run_background_pipeline_concurrent_logging(mock_session_local):
+    import concurrent.futures
+    mock_db = MagicMock()
+    mock_session_local.return_value = mock_db
+
+    mock_task_repo = MagicMock()
+    mock_storage = MagicMock()
+    mock_pdf = MagicMock()
+    mock_pdf.get_page_count.return_value = 4
+    mock_pdf.parse_pages.return_value = [0, 1, 2, 3]
+    mock_pdf.convert_to_images.return_value = ("/tmp/imgs", ["img1.png", "img2.png", "img3.png", "img4.png"])
+
+    def fake_analisar_imagens(pdf_basename, lista_caminhos, model_name, workers, log_cb):
+        # Simula chamadas concorrentes a partir de múltiplas threads de workers
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+            futures = [
+                executor.submit(log_cb, f"Página {i+1} processada", 25)
+                for i in range(len(lista_caminhos))
+            ]
+            concurrent.futures.wait(futures)
+        return [{"page_num_in_doc": str(i+1), "status": "success", "body": "<p>ok</p>"} for i in range(len(lista_caminhos))]
+
+    mock_ai = MagicMock()
+    mock_ai.analisar_imagens_paralelo.side_effect = fake_analisar_imagens
+    mock_html = MagicMock()
+    mock_html.build_complete_document.return_value = "<html><body>ok</body></html>"
+
+    service = ConverterService(mock_task_repo, mock_storage, mock_ai, mock_pdf, mock_html)
+
+    with patch("app.services.converter_service.TaskRepository", return_value=mock_task_repo):
+        service.run_background_pipeline(
+            task_id=100,
+            caminho_pdf="upload.pdf",
+            pdf_basename="doc.pdf",
+            paginas_str="1-4",
+            dpi=100,
+            workers=4,
+            ai_model="gemini",
+            report_button=False,
+            user_id=1
+        )
+
+    mock_task_repo.update_completion.assert_called_once()
+    assert mock_session_local.call_count >= 5
+    assert mock_db.close.call_count >= 5
+
+
+@patch("os.remove")
+@patch("os.path.exists", return_value=True)
+@patch("app.services.converter_service.SessionLocal")
+def test_run_background_pipeline_remote_storage_pdf_cleanup(mock_session_local, mock_exists, mock_remove):
+    mock_db = MagicMock()
+    mock_session_local.return_value = mock_db
+
+    mock_task_repo = MagicMock()
+    mock_storage = MagicMock()
+    mock_storage.is_remote = True
+    mock_storage.prepare_local_pdf.return_value = "/tmp/downloaded_from_s3.pdf"
+
+    mock_pdf = MagicMock()
+    mock_pdf.get_page_count.return_value = 1
+    mock_pdf.parse_pages.return_value = [0]
+    mock_pdf.convert_to_images.return_value = ("/tmp/imgs", ["img1.png"])
+
+    mock_ai = MagicMock()
+    mock_ai.analisar_imagens_paralelo.return_value = [{"page_num_in_doc": "1", "status": "success", "body": "<p>ok</p>"}]
+    mock_html = MagicMock()
+    mock_html.build_complete_document.return_value = "<html><body>ok</body></html>"
+
+    service = ConverterService(mock_task_repo, mock_storage, mock_ai, mock_pdf, mock_html)
+
+    with patch("app.services.converter_service.TaskRepository", return_value=mock_task_repo):
+        service.run_background_pipeline(
+            task_id=200,
+            caminho_pdf="s3://bucket/remote.pdf",
+            pdf_basename="remote.pdf",
+            paginas_str="",
+            dpi=100,
+            workers=4,
+            ai_model="gemini",
+            report_button=False,
+            user_id=1
+        )
+
+    mock_remove.assert_called_once_with("/tmp/downloaded_from_s3.pdf")
+
+

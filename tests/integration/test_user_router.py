@@ -68,8 +68,7 @@ def test_signup_unauthorized(client):
         headers={"Authorization": f"Bearer {token}"},
         json={"username": "unauthorized_user", "password": "unauthorized_password"}
     )
-    assert response.status_code == 401
-    assert response.json() == {"detail": "UNAUTHORIZED"}    
+    assert response.status_code == 403
 
 def test_get_me_success(client):
     login_response = client.post(
@@ -128,7 +127,7 @@ def test_get_all_users_unauthorized(client):
         "/user/",
         headers={"Authorization": f"Bearer {token}"}
     )
-    assert response.status_code == 401
+    assert response.status_code == 403
 
 def test_delete_user_admin(client):
     login_response = client.post(
@@ -150,7 +149,7 @@ def test_delete_user_admin(client):
     )
     assert delete_response.status_code == 204
 
-def test_delete_self_unauthorized(client):
+def test_delete_self_forbidden_business_rule(client):
     login_response = client.post(
         "/user/token",
         data={"username": "admin_test", "password": "testpass"}
@@ -164,7 +163,7 @@ def test_delete_self_unauthorized(client):
         f"/user/delete/{my_id}",
         headers={"Authorization": f"Bearer {token}"}
     )
-    assert delete_response.status_code == 401
+    assert delete_response.status_code == 400
 
 def test_delete_user_non_admin(client):
     login_response = client.post(
@@ -177,7 +176,7 @@ def test_delete_user_non_admin(client):
         "/user/delete/1",
         headers={"Authorization": f"Bearer {token}"}
     )
-    assert delete_response.status_code == 401
+    assert delete_response.status_code == 403
 
 def test_delete_user_not_found(client):
     login_response = client.post(

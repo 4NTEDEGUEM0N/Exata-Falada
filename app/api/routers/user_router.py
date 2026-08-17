@@ -3,7 +3,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from app.schemas.user_schemas import UserCreate, UserResponse, TokenResponse, PaginatedUserResponse
 from app.services.auth_service import AuthService
 from app.services.user_service import UserService
-from app.api.deps import get_auth_service, get_user_service, get_current_user
+from app.api.deps import get_auth_service, get_user_service, get_current_user, get_current_admin
 from app.models.user_model import UserModel
 
 user_router = APIRouter(prefix="/user", tags=["user"])
@@ -19,7 +19,7 @@ async def login_token(
 @user_router.post("/signup", response_model=UserResponse)
 async def create_user(
     user_schema: UserCreate,
-    current_user: UserModel = Depends(get_current_user),
+    current_user: UserModel = Depends(get_current_admin),
     user_service: UserService = Depends(get_user_service)
 ):
     """Cria um novo usuário (exige admin)."""
@@ -28,7 +28,7 @@ async def create_user(
 @user_router.get("/", response_model=PaginatedUserResponse)
 async def get_all_users(
     page: int = 1,
-    current_user: UserModel = Depends(get_current_user),
+    current_user: UserModel = Depends(get_current_admin),
     user_service: UserService = Depends(get_user_service)
 ):
     """Retorna a lista paginada de usuários (exige admin)."""
@@ -44,7 +44,7 @@ async def read_user_me(
 @user_router.post("/delete/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
     user_id: int,
-    current_user: UserModel = Depends(get_current_user),
+    current_user: UserModel = Depends(get_current_admin),
     user_service: UserService = Depends(get_user_service)
 ):
     """Exclui um usuário do sistema (exige admin)."""

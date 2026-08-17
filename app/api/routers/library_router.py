@@ -4,7 +4,7 @@ from app.schemas.library_schemas import BookResponse, PaginatedBookResponse
 from app.schemas.user_schemas import PaginatedUserResponse
 from app.services.library_service import LibraryService
 from app.integrations.storage.base import MediaType
-from app.api.deps import get_library_service, get_current_user
+from app.api.deps import get_library_service, get_current_user, get_current_admin
 from app.models.user_model import UserModel
 from app.core import settings, BusinessException
 
@@ -13,7 +13,7 @@ library_router = APIRouter(prefix="/library", tags=["library"])
 @library_router.get("/", response_model=PaginatedBookResponse)
 async def get_all_books(
     page: int = 1,
-    current_user: UserModel = Depends(get_current_user),
+    current_user: UserModel = Depends(get_current_admin),
     library_service: LibraryService = Depends(get_library_service)
 ):
     """Retorna todos os livros da biblioteca paginados (exige admin)."""
@@ -22,7 +22,7 @@ async def get_all_books(
 @library_router.post("/", response_model=BookResponse)
 async def create_book(
     file: UploadFile = File(...),
-    current_user: UserModel = Depends(get_current_user),
+    current_user: UserModel = Depends(get_current_admin),
     library_service: LibraryService = Depends(get_library_service)
 ):
     """Faz upload de um livro em formato HTML (exige admin)."""
@@ -45,7 +45,7 @@ async def create_book(
 async def add_book_to_user(
     user_id: int,
     book_id: int,
-    current_user: UserModel = Depends(get_current_user),
+    current_user: UserModel = Depends(get_current_admin),
     library_service: LibraryService = Depends(get_library_service)
 ):
     """Associa um livro a um usuário (exige admin)."""
@@ -55,7 +55,7 @@ async def add_book_to_user(
 async def remove_book_from_user(
     user_id: int,
     book_id: int,
-    current_user: UserModel = Depends(get_current_user),
+    current_user: UserModel = Depends(get_current_admin),
     library_service: LibraryService = Depends(get_library_service)
 ):
     """Remove a associação de um livro com um usuário (exige admin)."""
@@ -75,7 +75,7 @@ async def get_all_user_books(
 async def get_all_book_users(
     book_id: int,
     page: int = 1,
-    current_user: UserModel = Depends(get_current_user),
+    current_user: UserModel = Depends(get_current_admin),
     library_service: LibraryService = Depends(get_library_service)
 ):
     """Retorna os usuários com acesso a um determinado livro (exige admin)."""
@@ -99,7 +99,7 @@ async def get_book_file(
 @library_router.post("/delete/{book_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_book(
     book_id: int,
-    current_user: UserModel = Depends(get_current_user),
+    current_user: UserModel = Depends(get_current_admin),
     library_service: LibraryService = Depends(get_library_service)
 ):
     """Exclui um livro da biblioteca (exige admin)."""

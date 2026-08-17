@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 from app.services.user_service import UserService
 from app.models.user_model import UserModel
 from app.schemas.user_schemas import UserCreate
-from app.core.exceptions import UnauthorizedException, BusinessException, ResourceNotFoundException
+from app.core.exceptions import ForbiddenException, BusinessException, ResourceNotFoundException
 
 def test_create_user_non_admin_forbidden():
     mock_repo = MagicMock()
@@ -11,7 +11,7 @@ def test_create_user_non_admin_forbidden():
     user_in = UserCreate(username="user1", password="123")
     current_user = UserModel(id=2, username="normal", admin=False)
 
-    with pytest.raises(UnauthorizedException):
+    with pytest.raises(ForbiddenException):
         service.create_user(user_in, current_user)
 
 def test_create_user_duplicate_username():
@@ -50,12 +50,20 @@ def test_get_paginated_users():
     assert result.total_pages == 3
     assert len(result.users) == 1
 
+def test_get_paginated_users_non_admin_forbidden():
+    mock_repo = MagicMock()
+    service = UserService(mock_repo)
+    normal_user = UserModel(id=2, username="normal", admin=False)
+
+    with pytest.raises(ForbiddenException):
+        service.get_paginated_users(current_user=normal_user)
+
 def test_delete_user_self_forbidden():
     mock_repo = MagicMock()
     service = UserService(mock_repo)
     current_user = UserModel(id=1, username="admin", admin=True)
 
-    with pytest.raises(UnauthorizedException):
+    with pytest.raises(BusinessException):
         service.delete_user(user_id=1, current_user=current_user)
 
 def test_delete_user_not_found():

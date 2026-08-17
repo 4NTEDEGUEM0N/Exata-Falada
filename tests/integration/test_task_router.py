@@ -60,8 +60,7 @@ def test_get_all_tasks_admin(client, admin_auth_headers):
 
 def test_get_all_tasks_non_admin(client, auth_headers):
     response = client.get("/task/", headers=auth_headers)
-    assert response.status_code == 401
-    assert response.json() == {"detail": "UNAUTHORIZED"}
+    assert response.status_code == 403
 
 def test_get_user_tasks_own(client, auth_headers, test_user_id):
     response = client.get(f"/task/user/{test_user_id}", headers=auth_headers)
@@ -78,8 +77,7 @@ def test_get_user_tasks_admin(client, admin_auth_headers, test_user_id):
 
 def test_get_user_tasks_other_user(client, auth_headers, admin_user_id):
     response = client.get(f"/task/user/{admin_user_id}", headers=auth_headers)
-    assert response.status_code == 401
-    assert response.json() == {"detail": "UNAUTHORIZED"}
+    assert response.status_code == 403
 
 def test_get_task_by_id_own(client, auth_headers, dummy_tasks):
     task_id, _ = dummy_tasks
@@ -96,24 +94,22 @@ def test_get_task_by_id_admin(client, admin_auth_headers, dummy_tasks):
 def test_get_task_by_id_other_user(client, auth_headers, dummy_tasks):
     _, admin_task_id = dummy_tasks
     response = client.get(f"/task/{admin_task_id}", headers=auth_headers)
-    assert response.status_code == 401
-    assert response.json() == {"detail": "UNAUTHORIZED"}
+    assert response.status_code == 403
 
 def test_get_task_not_found(client, auth_headers):
     response = client.get("/task/9999", headers=auth_headers)
     assert response.status_code == 404
-    assert response.json() == {"detail": "NOT FOUND"}
+    assert response.json() == {"detail": "Tarefa não encontrada."}
 
 def test_delete_task_unauthorized(client, auth_headers, dummy_tasks):
     _, admin_task_id = dummy_tasks
     response = client.post(f"/task/delete/{admin_task_id}", headers=auth_headers)
-    assert response.status_code == 401
-    assert response.json() == {"detail": "UNAUTHORIZED"}
+    assert response.status_code == 403
 
 def test_delete_task_not_found(client, auth_headers):
     response = client.post("/task/delete/9999", headers=auth_headers)
     assert response.status_code == 404
-    assert response.json() == {"detail": "NOT FOUND"}
+    assert response.json() == {"detail": "Tarefa não encontrada."}
 
 def test_delete_task_own(client, auth_headers, dummy_tasks):
     task_id, _ = dummy_tasks

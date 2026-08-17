@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, status
 from app.schemas.task_schemas import TaskResponse, PaginatedTaskResponse
 from app.services.task_service import TaskService
-from app.api.deps import get_task_service, get_current_user
+from app.api.deps import get_task_service, get_current_user, get_current_admin
 from app.models.user_model import UserModel
 
 task_router = APIRouter(prefix="/task", tags=["task"])
@@ -9,7 +9,7 @@ task_router = APIRouter(prefix="/task", tags=["task"])
 @task_router.get("/", response_model=PaginatedTaskResponse)
 async def get_all_tasks(
     page: int = 1,
-    current_user: UserModel = Depends(get_current_user),
+    current_user: UserModel = Depends(get_current_admin),
     task_service: TaskService = Depends(get_task_service)
 ):
     """Retorna todas as tarefas paginadas (exige admin)."""

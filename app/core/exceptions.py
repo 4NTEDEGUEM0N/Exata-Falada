@@ -16,6 +16,11 @@ class ResourceNotFoundException(DomainException):
         super().__init__(detail=detail, status_code=status.HTTP_404_NOT_FOUND)
 
 class UnauthorizedException(DomainException):
-    """Exceção para falhas de autenticação ou falta de permissão."""
+    """Exceção para falhas de autenticação (credenciais inválidas ou ausentes - HTTP 401)."""
     def __init__(self, detail: str = "UNAUTHORIZED"):
         super().__init__(detail=detail, status_code=status.HTTP_401_UNAUTHORIZED)
+
+class ForbiddenException(DomainException):
+    """Exceção para usuário autenticado sem permissão suficiente (HTTP 403)."""
+    def __init__(self, detail: str = "FORBIDDEN"):
+        super().__init__(detail=detail, status_code=status.HTTP_403_FORBIDDEN)
