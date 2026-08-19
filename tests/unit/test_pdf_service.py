@@ -66,8 +66,9 @@ def test_convert_to_images_success(mock_makedirs, mock_fitz_open):
 
 @patch('shutil.rmtree')
 @patch('os.path.exists', return_value=True)
+@patch('os.makedirs')
 @patch('fitz.open')
-def test_convert_to_images_error(mock_fitz_open, mock_exists, mock_rmtree):
+def test_convert_to_images_error(mock_fitz_open, mock_makedirs, mock_exists, mock_rmtree):
     mock_fitz_open.side_effect = RuntimeError("Corrupted PDF")
 
     with pytest.raises(RuntimeError) as exc:

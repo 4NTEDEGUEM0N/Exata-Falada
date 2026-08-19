@@ -67,10 +67,10 @@ class PdfService:
         pdf_basename = os.path.basename(caminho_pdf)
         timestamp = time.strftime("%Y%m%d-%H%M%S")
         pasta_saida = os.path.join('files/temp_processing', f"{pdf_basename}_{timestamp}")
-        os.makedirs(pasta_saida, exist_ok=True)
         image_paths = []
 
         try:
+            os.makedirs(pasta_saida, exist_ok=True)
             with fitz.open(caminho_pdf) as documento:
                 for numero_pagina in paginas_selecionadas:
                     pagina = documento.load_page(numero_pagina)
