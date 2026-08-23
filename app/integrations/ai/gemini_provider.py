@@ -93,16 +93,23 @@ class GeminiProvider(AIProvider):
             current_page_num_in_doc = match_pagina.group(1) if match_pagina else "Desconhecida"
 
             base64_image_data = base64.b64encode(image_data).decode('utf-8')
-            prompt = get_prompt(pdf_basename, imagem.size, current_page_num_in_doc)
 
             MAX_RETRIES = self.max_retries
             response = None
             html_body = None
             final_finish_reason = 'UNKNOWN'
             current_model = model_name
+            is_recitation = False
 
             for attempt in range(MAX_RETRIES):
                 try:
+                    prompt = get_prompt(
+                        pdf_basename,
+                        imagem.size,
+                        current_page_num_in_doc,
+                        is_recitation=is_recitation
+                    )
+
                     response = self.client.models.generate_content(
                         model=current_model,
                         contents=[prompt, imagem]
@@ -136,7 +143,8 @@ class GeminiProvider(AIProvider):
 
                 except Exception as e:
                     is_max_tokens = "MAX_TOKENS" in str(e).upper()
-                    is_recitation = "RECITATION" in str(e).upper()
+                    if "RECITATION" in str(e).upper():
+                        is_recitation = True
                     should_switch_model = is_max_tokens or is_recitation
 
                     if attempt < MAX_RETRIES - 1:

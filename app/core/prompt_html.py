@@ -1,6 +1,16 @@
 import html
 
-def get_prompt(page_filename: str, img_dimensions: tuple, current_page_num_in_doc: str):
+def get_prompt(
+    page_filename: str,
+    img_dimensions: tuple,
+    current_page_num_in_doc: str,
+    is_recitation: bool = False
+):
+    recitation_instruction = ""
+    if is_recitation:
+        recitation_instruction = """    * **CRITICAL SPACING RULE:** Replace all normal spaces between words with the tag "SP4C" (e.g., "word1SP4Cword2"). Apply this replacement ONLY to spaces between words; preserve line breaks, HTML tags, and other special whitespace intact.
+"""
+
     prompt = f"""
 Analyze the content of the provided image (filename: {page_filename}, dimensions: {img_dimensions[0]}x{img_dimensions[1]} pixels, representing page {current_page_num_in_doc} of the document). Your goal is to convert this page into an accessible HTML format suitable for screen readers, specifically targeting visually impaired STEM students reading Portuguese content. Don't change the original text or language, even if it's wrong; the main goal is fidelity to the original text.
 **Instructions:**
@@ -11,6 +21,7 @@ Analyze the content of the provided image (filename: {page_filename}, dimensions
     * Preserve paragraph structure where possible.
     * **Omit standalone page numbers** that typically appear at the very top or bottom of a page, unless they are part of a sentence or reference.
     * **CRITICAL: If the page is blank or contains only minimal, non-textual content such as small, non-descriptive shapes or lines, output only the text "<p>Página em branco</p>" (without quotes).
+{recitation_instruction}
 
 2.  **Web Links (URLs):**
     * Identify all web addresses (URLs, links) in the text (e.g., starting with `http://`, `https://`, `www.`).

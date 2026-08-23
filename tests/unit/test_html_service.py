@@ -10,6 +10,11 @@ def test_clean_html_response_raw_html():
     cleaned = HtmlService.clean_html_response(raw)
     assert cleaned == "<div><span>Conteúdo Puro</span></div>"
 
+def test_clean_html_response_sp4c_replacement():
+    raw = "```html\n<p>EsteSP4CéSP4CumSP4CtesteSP4CcomSP4Cpalavras.</p>\n```"
+    cleaned = HtmlService.clean_html_response(raw)
+    assert cleaned == "<p>Este é um teste com palavras.</p>"
+
 def test_clean_html_response_empty():
     assert HtmlService.clean_html_response("") is None
     assert HtmlService.clean_html_response("Texto sem tags") is None

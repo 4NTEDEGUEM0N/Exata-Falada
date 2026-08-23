@@ -148,3 +148,13 @@ def test_domain_exceptions():
     f_default = ForbiddenException()
     assert f_default.status_code == 403
     assert f_default.detail == "FORBIDDEN"
+
+
+def test_get_prompt_recitation_toggle():
+    from app.core.prompt_html import get_prompt
+    prompt_default = get_prompt("teste.pdf", (100, 100), "1", is_recitation=False)
+    assert "SP4C" not in prompt_default
+
+    prompt_recitation = get_prompt("teste.pdf", (100, 100), "1", is_recitation=True)
+    assert "SP4C" in prompt_recitation
+    assert "Text Content" in prompt_recitation

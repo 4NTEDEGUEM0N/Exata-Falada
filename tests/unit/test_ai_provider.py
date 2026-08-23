@@ -80,7 +80,7 @@ def test_gemini_processar_pagina_imagem_recitation_fallback(mock_file, mock_img_
     mock_success_cand = MagicMock()
     mock_success_cand.finish_reason.name = 'STOP'
     mock_success.candidates = [mock_success_cand]
-    mock_success.text = "```html\n<p>Recuperado</p>\n```"
+    mock_success.text = "```html\n<p>RecuperadoSP4CcomSP4Csucesso</p>\n```"
 
     provider.client.models.generate_content = MagicMock(side_effect=[mock_recitation, mock_success])
 
@@ -95,9 +95,11 @@ def test_gemini_processar_pagina_imagem_recitation_fallback(mock_file, mock_img_
         )
 
     assert result["status"] == "success"
-    assert result["body"] == "<p>Recuperado</p>"
+    assert result["body"] == "<p>Recuperado com sucesso</p>"
     calls = provider.client.models.generate_content.call_args_list
     assert len(calls) == 2
+    assert "SP4C" not in calls[0][1]["contents"][0]
+    assert "SP4C" in calls[1][1]["contents"][0]
     assert calls[1][1]["model"] == provider.retry_model
 
 @patch('os.path.exists')

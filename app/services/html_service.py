@@ -35,6 +35,7 @@ class HtmlService:
             html_body = re.sub(r'<bdi>([a-zA-Z0-9_](?:<sup>.*?</sup>)?)</bdi>', r'\1', html_body)
             html_body = re.sub(r'<bdi>(\\[a-zA-Z]+(?:\{.*?\})?(?:\s*\^\{.*?\})?(?:\s*_\{.*?\})?)</bdi>', r'\1', html_body)
             html_body = re.sub(r'<bdi>\s*</bdi>', '', html_body)
+            html_body = html_body.replace("SP4C", " ")
 
         return html_body
 
