@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     MAX_FILE_SIZE: int = 50 * 1024 * 1024
     DEFAULT_DPI: int = 100
     DEFAULT_WORKERS: int = 4
-    DEFAULT_REPORT_BUTTON: bool = False
+    DEFAULT_REPORT_BUTTON: bool = True
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
