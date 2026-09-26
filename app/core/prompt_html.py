@@ -459,15 +459,17 @@ def get_html(pdf_filename_title: str, report_button: bool):
     .footnotes-list li a { text-decoration: none; margin-left: 5px;}
     .footnotes-list li a:hover { text-decoration: underline; }
     .sr-only {
+        position: absolute;
         opacity: 0;
-        height: 1px;
-        width: 1px;
-        overflow: hidden;
-        display: inline-block;
-        white-space: nowrap;
-        border: 0;
-        padding: 0;
-        margin: 0;
+        color: transparent;
+        font-size: 1rem;
+        line-height: 1;
+        pointer-events: none;
+        user-select: none;
+        max-width: 100%;
+        white-space: normal;
+        word-break: break-word;
+        overflow-wrap: break-word;
     }
     p i, span i {font-style: italic;}
     sup > a {text-decoration: none;} sup > a:hover {text-decoration: underline;}
